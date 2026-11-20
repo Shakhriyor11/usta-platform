@@ -1,0 +1,114 @@
+# Edge darajasidagi qo'pol rate limit (IP bo'yicha). Nozik limitlar ilova ichida (Redis: OTP — raqam va IP, chat —
+# foydalanuvchi). Diqqat: mobil operatorlarda CGNAT — bitta IP ortida ko'p foydalanuvchi bo'lishi mumkin; 429 lar
+# ko'paysa NGINX_API_RATE ni oshiring (docs/security.md).
+limit_req_zone $binary_remote_addr zone=api_per_ip:20m rate=${NGINX_API_RATE};
+limit_req_zone $binary_remote_addr zone=auth_per_ip:10m rate=${NGINX_AUTH_RATE};
+
+# nginx image ishga tushganda ${SERVER_NAME} envsubst orqali almashtiriladi.
+
+server {
+    listen 80;
+    server_name ${SERVER_NAME};
+
+    location = /healthz { return 200 "ok\n"; }
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    location / { return 301 https://$host$request_uri; }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${SERVER_NAME};
+
+    ssl_certificate     /etc/nginx/certs/server.crt;
+    ssl_certificate_key /etc/nginx/certs/server.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "no-referrer" always;
+
+    # Bu sarlavhalarni edge (nginx) qo'yadi — ilovadan kelgan nusxalari dublikat bo'lmasligi uchun yashiriladi
+    proxy_hide_header Strict-Transport-Security;
+    proxy_hide_header X-Content-Type-Options;
+    proxy_hide_header X-Frame-Options;
+
+    location = /healthz { access_log off; return 200 "ok\n"; }
+
+    # Edge rate limit javobi ham API bilan bir xil formatda (RFC 9457) — mijozlar "code" ga tayanadi
+    error_page 429 = @rate_limited;
+    location @rate_limited {
+        default_type application/problem+json;
+        add_header Retry-After 1 always;
+        return 429 '{"type":"urn:usta:error:too_many_requests","title":"Too many requests","status":429,"code":"TOO_MANY_REQUESTS","detail":"Edge rate limit"}';
+    }
+
+    # Actuator tashqariga chiqmaydi (u alohida ichki portda ham ishlaydi)
+    location /actuator { return 404; }
+
+    # Fayllar: ilova beradigan presigned GET URL'lar (bucket private, imzo 15 daqiqa amal qiladi).
+    # Host sarlavhasi o'zgarmasdan uzatiladi — SigV4 imzosi unga bog'langan (S3_PUBLIC_ENDPOINT bilan mos bo'lsin).
+    location /${S3_BUCKET}/ {
+        limit_except GET HEAD { deny all; }
+        proxy_pass http://minio:9000;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $http_host;
+        proxy_buffering off;
+        proxy_hide_header Set-Cookie;
+        add_header Cache-Control "private, max-age=600" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    location /ws {
+        proxy_pass http://usta_api;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;   # edge: mijoz yuborgan qiymatga ishonilmaydi (IP rate limit)
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-Id $req_id;
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+    }
+
+    # Kirish (OTP) — alohida, qattiqroq zona: SMS bombardimon va kod tanlashga qarshi birinchi qatlam
+    location ^~ /api/v1/auth/ {
+        limit_req zone=auth_per_ip burst=10 nodelay;
+        limit_req zone=api_per_ip burst=${NGINX_API_BURST} nodelay;
+
+        proxy_pass http://usta_api;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port $server_port;
+        proxy_set_header X-Request-Id $req_id;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 30s;
+    }
+
+    location / {
+        limit_req zone=api_per_ip burst=${NGINX_API_BURST} nodelay;
+
+        proxy_pass http://usta_api;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;   # edge: mijoz yuborgan qiymatga ishonilmaydi (IP rate limit)
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port $server_port;
+        proxy_set_header X-Request-Id $req_id;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+    }
+}

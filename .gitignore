@@ -1,0 +1,14 @@
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+.idea/
+*.iml
+.vscode/
+out/
+.DS_Store
+.env
+deploy/nginx/certs/
+backups/
+*.log
+.deployed-image
+config/

@@ -1,0 +1,137 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Testcontainers GitHub runner'idagi Docker'dan foydalanadi (PostGIS, Redis).
+      - name: Build, unit + integration + ArchUnit/Modulith tests
+        run: ./gradlew build --no-daemon
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: build/reports/tests/
+          retention-days: 7
+
+      - name: Validate docker compose file
+        run: docker compose config -q
+
+  # Alert qoidalari: sintaksis + unit testlar (deploy/prometheus/alerts.test.yml)
+  monitoring:
+    name: Alert rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: promtool check + test
+        run: |
+          docker run --rm --entrypoint promtool -v "$PWD/deploy/prometheus:/p:ro" -w /p prom/prometheus:v3.16.0 check rules alerts.yml
+          docker run --rm --entrypoint promtool -v "$PWD/deploy/prometheus:/p:ro" -w /p prom/prometheus:v3.16.0 test rules alerts.test.yml
+
+  # Zaifliklar: image (OS paketlari + JAR'lar) va repo (sirlar, Dockerfile/compose noto'g'ri sozlamalari).
+  # Tuzatilishi mumkin bo'lgan HIGH/CRITICAL topilsa — pipeline to'xtaydi.
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image (scan only)
+        run: docker build -t usta-api:scan .
+      - name: Trivy — image
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.67.2 image \
+            --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 usta-api:scan
+      - name: Trivy — repository (secrets, misconfig)
+        run: |
+          docker run --rm -v "$PWD:/src:ro" aquasec/trivy:0.67.2 fs --scanners secret,misconfig \
+            --severity HIGH,CRITICAL --exit-code 1 --skip-dirs /src/deploy/nginx/certs /src
+
+  image:
+    name: Docker image
+    needs: [build, monitoring, security]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/api
+          # type=ref,event=tag -> "v1.2.3" (deploy aynan shu tegni tortadi), semver -> "1.2.3"
+          tags: |
+            type=sha
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # CD: server SSH ma'lumotlari secrets'da bo'lsa, teg (v*) push qilinganda deploy qiladi.
+  # Kerakli secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH
+  deploy:
+    name: Deploy (production)
+    needs: image
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd "${{ secrets.DEPLOY_PATH }}"
+            git fetch --tags && git checkout "${{ github.ref_name }}"
+            # backup -> pull -> up -> health/smoke -> muvaffaqiyatsiz bo'lsa avtomatik rollback
+            ./scripts/deploy.sh "ghcr.io/${{ github.repository }}/api:${{ github.ref_name }}"

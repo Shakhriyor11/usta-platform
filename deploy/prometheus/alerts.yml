@@ -1,0 +1,102 @@
+# =====================================================================
+# Usta platformasi — alert qoidalari (Prometheus). Grafana ularni Alerting -> Alert rules bo'limida
+# "Data source-managed" sifatida ko'rsatadi (tasdiqlangan: alertlar faqat Grafana'da).
+# Telegram/email kerak bo'lsa — Alertmanager yoki Grafana contact point qo'shiladi, qoidalar o'zgarmaydi.
+# Tekshiruv: promtool check rules alerts.yml && promtool test rules alerts.test.yml
+# =====================================================================
+groups:
+  - name: usta-availability
+    rules:
+      - alert: ApiDown
+        expr: up{job="usta-api"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "API javob bermayapti"
+          description: "Prometheus {{ $labels.instance }} dan metrikalarni 1 daqiqadan beri ololmayapti (konteyner to'xtagan yoki sog'lom emas)."
+
+      - alert: ApiHighErrorRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{job="usta-api", status=~"5.."}[5m]))
+            / clamp_min(sum(rate(http_server_requests_seconds_count{job="usta-api"}[5m])), 1e-9) > 0.02
+          and sum(rate(http_server_requests_seconds_count{job="usta-api"}[5m])) > 0.5
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "5xx xatolar ulushi {{ $value | humanizePercentage }}"
+          description: "So'nggi 5 daqiqada 5xx javoblar 2% dan oshdi. Loglar: docker compose logs api | grep ERROR"
+
+      - alert: ApiHighLatency
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job="usta-api", uri!~"/actuator.*"}[5m]))) > 1
+          and sum(rate(http_server_requests_seconds_count{job="usta-api"}[5m])) > 0.5
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "p95 kechikish {{ $value | humanizeDuration }}"
+          description: "API p95 javob vaqti 10 daqiqadan beri 1 s dan yuqori (yuklama testida normal p95 ~16 ms)."
+
+  - name: usta-resources
+    rules:
+      - alert: DbPoolSaturated
+        expr: max(hikaricp_connections_pending{job="usta-api"}) > 5
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "DB ulanishlari navbati: {{ $value }}"
+          description: "So'rovlar DB ulanishini kutmoqda — PostgreSQL CPU yoki sekin so'rovlar (pg_stat_statements) tekshirilsin."
+
+      - alert: JvmHeapHigh
+        expr: |
+          sum by (instance) (jvm_memory_used_bytes{job="usta-api", area="heap"})
+            / sum by (instance) (jvm_memory_max_bytes{job="usta-api", area="heap"} > 0) > 0.9
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "JVM heap {{ $value | humanizePercentage }}"
+          description: "Heap 10 daqiqadan beri 90% dan yuqori — xotira sizishi yoki API_MEMORY yetarli emas."
+
+  - name: usta-business
+    rules:
+      - alert: OutboxBacklog
+        expr: max(outbox_events_pending{job="usta-api"}) > 500
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Outbox navbati: {{ $value }} ta event"
+          description: "Eventlar yetkazilmayapti (bildirishnomalar, qidiruv indeksi kechikadi). OutboxRelay loglarini tekshiring."
+
+      - alert: OutboxDeadEvents
+        expr: max(outbox_events_dead{job="usta-api"}) > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $value }} ta event yetkazib bo'lmadi (dead)"
+          description: "max-attempts tugagan eventlar: select id, event_type, last_error from outbox_events where published_at is null and attempts >= 10;"
+
+      - alert: FinanceReconciliationMismatch
+        expr: max(finance_reconciliation_mismatches{job="usta-api"}) > 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Hisob-kitobda {{ $value }} ta nomuvofiqlik"
+          description: "Tungi solishtirish: buyurtma komissiyasi, komissiya hisoboti va ledger mos emas. GET /api/v1/admin/finance/reconciliation"
+
+      - alert: OrdersExpiringTooOften
+        expr: |
+          sum(increase(orders_transitions_total{job="usta-api", to="EXPIRED"}[1h]))
+            / clamp_min(sum(increase(orders_transitions_total{job="usta-api", to="SEARCHING"}[1h])), 1) > 0.3
+          and sum(increase(orders_transitions_total{job="usta-api", to="SEARCHING"}[1h])) >= 10
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "Buyurtmalarning {{ $value | humanizePercentage }} usta topilmay EXPIRED bo'lyapti"
+          description: "So'nggi soatda buyurtmalarning 30% dan ko'pi hech kim qabul qilmay tugadi — hududda usta yetishmaydi yoki push ishlamayapti."
+
+      - alert: ProductionConfigWarnings
+        expr: max(app_config_warnings{job="usta-api"}) > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value }} ta xavfli production sozlamasi"
+          description: "Ilova loglarida 'PRODUCTION CONFIG WARNING' qatorlari (standart JWT siri, SMS/push stub, Swagger ochiq va h.k.)."

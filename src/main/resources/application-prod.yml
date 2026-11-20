@@ -1,0 +1,20 @@
+# Production: JSON (ECS) loglar, Swagger standart bo'yicha o'chiq (SWAGGER_ENABLED=true bilan yoqiladi).
+logging:
+  structured:
+    format:
+      console: ecs
+    ecs:
+      service:
+        name: usta-platform
+
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
+
+app:
+  security:
+    jwt:
+      # prod'da standart qiymat yo'q — JWT_SECRET berilmasa ilova ishga tushmaydi
+      secret: ${JWT_SECRET}

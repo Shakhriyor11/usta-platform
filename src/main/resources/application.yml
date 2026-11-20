@@ -1,0 +1,202 @@
+# Barcha maxfiy qiymatlar environment o'zgaruvchilari orqali beriladi.
+# Standart qiymatlar faqat lokal ishlab chiqish uchun mo'ljallangan.
+spring:
+  application:
+    name: usta-platform
+  autoconfigure:
+    exclude:
+      # in-memory foydalanuvchi va "generated password" kerak emas — autentifikatsiya JWT orqali (P2)
+      - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  profiles:
+    default: local
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/usta}
+    username: ${DB_USERNAME:usta}
+    password: ${DB_PASSWORD:usta}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      minimum-idle: 2
+      connection-timeout: 5000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+        default_batch_fetch_size: 50
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  data:
+    web:
+      pageable:
+        default-page-size: 20
+        max-page-size: 100
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+    fallback-to-system-locale: false
+  servlet:
+    multipart:
+      max-file-size: 50MB      # aniq limitlar FilePurpose bo'yicha (avatar 5MB, hujjat/portfolio 10MB, video 50MB)
+      max-request-size: 55MB
+
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  forward-headers-strategy: framework
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8081}
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  info:
+    env:
+      enabled: false
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      # p95/p99 uchun gistogramma: oz sonli SLO chegaralari (to'liq percentiles-histogram ~70 bucket — kardinallik qimmat)
+      slo:
+        http.server.requests: 25ms,50ms,100ms,250ms,500ms,1s,2s,5s
+
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+    path: /swagger-ui.html
+    operations-sorter: alpha
+    tags-sorter: alpha
+    persist-authorization: true      # token sahifa yangilanganda saqlanadi
+    display-request-duration: true
+    filter: true                     # endpoint/teg bo'yicha qidiruv
+    doc-expansion: none              # bo'limlar yopiq holda ochiladi
+    try-it-out-enabled: true
+  default-produces-media-type: application/json
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p [%X{traceId:-}] %-40.40logger{39} : %m%n%wEx"
+  level:
+    root: INFO
+    uz.usta.platform: ${APP_LOG_LEVEL:INFO}
+
+app:
+  security:
+    jwt:
+      # Lokal standart qiymat. PRODUCTION'da albatta JWT_SECRET (>= 32 bayt, tasodifiy) bering.
+      secret: ${JWT_SECRET:local-dev-only-secret-change-me-0123456789abcdef}
+      issuer: usta-platform
+      access-token-ttl: ${JWT_ACCESS_TTL:PT15M}
+  identity:
+    refresh-token-ttl: ${JWT_REFRESH_TTL:P30D}
+    refresh-reuse-grace: PT10S
+    # Vergul bilan: +998901234567,+998911234567 — shu raqamlar kirganda ADMIN roli beriladi
+    admin-phones: ${ADMIN_PHONES:}
+    cleanup-cron: "0 45 3 * * *"
+    otp:
+      length: 5
+      ttl: PT2M
+      max-attempts: 5
+      resend-cooldown: PT60S
+      per-phone-limit: 5
+      per-phone-window: PT1H
+      per-ip-limit: 20
+      per-ip-window: PT1H
+      verify-per-ip-limit: 60
+  sms:
+    provider: ${SMS_PROVIDER:log}   # log | eskiz
+    eskiz:
+      base-url: ${ESKIZ_BASE_URL:https://notify.eskiz.uz}
+      email: ${ESKIZ_EMAIL:}
+      password: ${ESKIZ_PASSWORD:}
+      from: ${ESKIZ_FROM:4546}
+  storage:
+    endpoint: ${S3_ENDPOINT:http://127.0.0.1:9000}
+    # Presigned URL'lardagi manzil — mobil ilova/brauzer ochadigan bo'lishi kerak
+    public-endpoint: ${S3_PUBLIC_ENDPOINT:${S3_ENDPOINT:http://127.0.0.1:9000}}
+    region: ${S3_REGION:us-east-1}
+    bucket: ${S3_BUCKET:usta}
+    access-key: ${S3_ACCESS_KEY:usta-minio}
+    secret-key: ${S3_SECRET_KEY:usta-minio-secret}
+    path-style: true
+    create-bucket: ${S3_CREATE_BUCKET:true}
+    url-ttl: PT15M
+  profile:
+    # Verifikatsiyaga yuborish uchun majburiy hujjatlar
+    required-documents: PASSPORT,SELFIE
+    max-documents: 10
+    max-addresses: 10
+  catalog:
+    max-category-depth: 3
+    max-services-per-master: 50
+    max-portfolio-items: 30
+  search:
+    default-radius-km: 20
+    max-radius-km: 100
+    cache-ttl: PT60S        # qidiruv natijalari keshi; indeks o'zgarganda darhol eskiradi
+    online-ttl: PT90S       # heartbeat kelmasa — offline
+  order:
+    offer-batch-size: 5     # bir vaqtda nechta eng yaqin ustaga taklif
+    offer-ttl: PT5M         # usta javob berish muddati (keyin keyingi ustalarga)
+    search-timeout: PT15M   # hech kim qabul qilmasa — EXPIRED
+    max-schedule-ahead: P30D
+    max-attachments: 5
+    maintenance-interval: PT30S
+    maintenance-batch: 100
+  payment:
+    commission-percent: 10
+    timezone: Asia/Tashkent           # hisob davri — hafta (dushanba 00:00) shu zonada
+    invoice-due-days: 7               # hafta yopilgach komissiyani to'lash muddati
+    invoicing-cron: "0 5 * * * *"     # har soat: tugagan haftalarni yopadi (idempotent)
+    reconciliation-cron: "0 30 2 * * *"
+  push:
+    provider: ${PUSH_PROVIDER:log}
+  warmup:
+    enabled: ${APP_WARMUP_ENABLED:true}   # trafikdan oldin JVM'ni isitish (docs/performance.md)   # log (FCM kalitlari berilganda — fcm)
+  i18n:
+    default-locale: uz
+    supported-locales: uz,ru,en
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+    max-age: 1h
+  scheduling:
+    enabled: true
+  outbox:
+    relay-enabled: true
+    poll-interval: PT2S
+    batch-size: 100
+    max-attempts: 10
+    retry-backoff: PT10S
+    retention: P7D
+    cleanup-cron: "0 30 3 * * *"

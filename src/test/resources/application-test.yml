@@ -1,0 +1,23 @@
+app:
+  warmup:
+    enabled: false
+  scheduling:
+    enabled: false   # testlar relay'ni o'zi chaqiradi (deterministik)
+  outbox:
+    retry-backoff: PT0S
+  identity:
+    admin-phones: "+998990000001"
+    refresh-reuse-grace: PT0S   # reuse detection'ni darhol tekshirish uchun
+    otp:
+      per-phone-limit: 10000
+      per-ip-limit: 10000
+      verify-per-ip-limit: 10000
+
+logging:
+  level:
+    uz.usta.platform: DEBUG
+    org.testcontainers: WARN
+
+management:
+  server:
+    port: 0   # testlar bir-biriga va lokal stekka xalaqit bermasligi uchun

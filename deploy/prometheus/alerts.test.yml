@@ -1,0 +1,83 @@
+# promtool test rules alerts.test.yml — alert qoidalarining unit testlari
+rule_files:
+  - alerts.yml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'up{job="usta-api", instance="api:8081"}'
+        values: '1 1 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: ApiDown
+        exp_alerts: []          # endigina 0 bo'ldi — "for: 1m" hali tugamagan (pending)
+      - eval_time: 3m
+        alertname: ApiDown
+        exp_alerts:
+          - exp_labels: { severity: critical, job: usta-api, instance: "api:8081" }
+            exp_annotations:
+              summary: "API javob bermayapti"
+              description: "Prometheus api:8081 dan metrikalarni 1 daqiqadan beri ololmayapti (konteyner to'xtagan yoki sog'lom emas)."
+
+  - interval: 1m
+    input_series:
+      # 10 rps, shundan 1 rps 500 -> 10%
+      - series: 'http_server_requests_seconds_count{job="usta-api", status="200", uri="/x"}'
+        values: '0+540x20'
+      - series: 'http_server_requests_seconds_count{job="usta-api", status="500", uri="/x"}'
+        values: '0+60x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ApiHighErrorRate
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: "5xx xatolar ulushi 10%"
+              description: "So'nggi 5 daqiqada 5xx javoblar 2% dan oshdi. Loglar: docker compose logs api | grep ERROR"
+
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="usta-api", status="200", uri="/x"}'
+        values: '0+600x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ApiHighErrorRate
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'outbox_events_dead{job="usta-api"}'
+        values: '0 0 2 2 2 2 2 2 2'
+      - series: 'finance_reconciliation_mismatches{job="usta-api"}'
+        values: '0 0 0 1 1 1'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: OutboxDeadEvents
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: "2 ta event yetkazib bo'lmadi (dead)"
+              description: "max-attempts tugagan eventlar: select id, event_type, last_error from outbox_events where published_at is null and attempts >= 10;"
+      - eval_time: 5m
+        alertname: FinanceReconciliationMismatch
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: "Hisob-kitobda 1 ta nomuvofiqlik"
+              description: "Tungi solishtirish: buyurtma komissiyasi, komissiya hisoboti va ledger mos emas. GET /api/v1/admin/finance/reconciliation"
+
+  - interval: 1m
+    input_series:
+      # soatiga 60 ta buyurtma qidiruvga, 30 tasi EXPIRED -> 50%
+      - series: 'orders_transitions_total{job="usta-api", to="SEARCHING"}'
+        values: '0+1x90'
+      - series: 'orders_transitions_total{job="usta-api", to="EXPIRED"}'
+        values: '0+0.5x90'
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: OrdersExpiringTooOften
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations:
+              summary: "Buyurtmalarning 50% usta topilmay EXPIRED bo'lyapti"
+              description: "So'nggi soatda buyurtmalarning 30% dan ko'pi hech kim qabul qilmay tugadi — hududda usta yetishmaydi yoki push ishlamayapti."

@@ -1,0 +1,18 @@
+# Lokal ishlab chiqish (IntelliJ yoki ./gradlew bootRun): avval `docker compose up -d postgres redis minio`.
+# Standart qiymatlar docker-compose.yml dagi dev stekka mos. Host porti band bo'lsa (masalan, kompyuterda boshqa
+# PostgreSQL 5432 da ishlasa) — POSTGRES_HOST_PORT env yoki git'ga tushmaydigan ./config/application-local.yml.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:${POSTGRES_HOST_PORT:5432}/usta}
+  data:
+    redis:
+      port: ${REDIS_HOST_PORT:6379}
+      password: ${REDIS_PASSWORD:usta}
+
+app:
+  storage:
+    endpoint: ${S3_ENDPOINT:http://127.0.0.1:${MINIO_API_HOST_PORT:9000}}
+
+logging:
+  level:
+    uz.usta.platform: DEBUG

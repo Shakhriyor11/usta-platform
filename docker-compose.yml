@@ -1,0 +1,228 @@
+# Ishga tushirish:  docker compose up -d        (standart qiymatlar — faqat lokal uchun)
+# Production:      cp .env.example .env && parollarni almashtiring && docker compose up -d --build
+# Resurs limitlari standart holda 4 vCPU / 8 GB server uchun (API_CPUS, API_MEMORY, PG_MEMORY ... bilan o'zgartiriladi)
+name: usta
+
+x-restart: &restart
+  restart: unless-stopped
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+services:
+  postgres:
+    image: postgis/postgis:17-3.6
+    <<: [*restart, *logging]
+    security_opt: ["no-new-privileges:true"]
+    # 4 vCPU / 8 GB server uchun (postgres'ga ~2 GB): yuklama testi natijalari — docs/performance.md
+    command:
+      - postgres
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - effective_cache_size=1536MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - max_connections=100
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - log_min_duration_statement=500
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+    deploy:
+      resources:
+        limits: { cpus: "${PG_CPUS:-1.5}", memory: "${PG_MEMORY:-2g}" }
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-usta}
+      POSTGRES_USER: ${POSTGRES_USER:-usta}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-usta}
+      TZ: UTC
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"   # faqat localhost (lokal ishlab chiqish / backup uchun)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:8.6-alpine
+    <<: [*restart, *logging]
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits: { cpus: "${REDIS_CPUS:-0.25}", memory: "${REDIS_MEMORY:-512m}" }
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-usta}", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redisdata:/data
+    ports:
+      - "127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-usta}
+
+  minio:
+    # MinIO 2025-yildan community Docker image chiqarmaydi; Chainguard qayta yig'gan image ishlatiladi.
+    # Production'da managed S3 (yoki boshqa S3-mos) ishlatish tavsiya etiladi — ilova faqat S3 API'ga bog'langan.
+    image: cgr.dev/chainguard/minio:latest
+    <<: [*restart, *logging]
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits: { cpus: "${MINIO_CPUS:-0.25}", memory: "${MINIO_MEMORY:-512m}" }
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-usta-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-usta-minio-secret}
+    volumes:
+      - miniodata:/data
+    ports:
+      - "127.0.0.1:${MINIO_API_HOST_PORT:-9000}:9000"   # S3 API
+      - "127.0.0.1:${MINIO_CONSOLE_HOST_PORT:-9001}:9001"   # web konsol
+
+  api:
+    build: .
+    image: ${API_IMAGE:-usta-platform-api:local}
+    <<: [*restart, *logging]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    read_only: true                 # yozish faqat /tmp ga (multipart, JVM)
+    tmpfs:
+      - /tmp:size=256m
+    deploy:
+      resources:
+        limits: { cpus: "${API_CPUS:-2.0}", memory: "${API_MEMORY:-2g}" }
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_started }
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-usta}
+      DB_USERNAME: ${POSTGRES_USER:-usta}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-usta}
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-usta}
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-usta-minio}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-usta-minio-secret}
+      S3_BUCKET: ${S3_BUCKET:-usta}
+      # Presigned URL manzili — mijozlar fayllarni nginx orqali oladi (HTTPS port 443 bo'lmasa portni qo'shing)
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-https://localhost}
+      # Lokal standart. PRODUCTION'da .env da tasodifiy JWT_SECRET bering: openssl rand -base64 48
+      JWT_SECRET: ${JWT_SECRET:-insecure-local-compose-secret-change-me-0123456789}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-PT15M}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-P30D}
+      ADMIN_PHONES: ${ADMIN_PHONES:-}
+      SMS_PROVIDER: ${SMS_PROVIDER:-log}
+      ESKIZ_EMAIL: ${ESKIZ_EMAIL:-}
+      ESKIZ_PASSWORD: ${ESKIZ_PASSWORD:-}
+      ESKIZ_FROM: ${ESKIZ_FROM:-4546}
+      PUSH_PROVIDER: ${PUSH_PROVIDER:-log}
+      APP_WARMUP_ENABLED: ${APP_WARMUP_ENABLED:-true}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+      APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
+    expose:
+      - "8080"   # API (faqat nginx orqali)
+      - "8081"   # actuator/prometheus (faqat ichki tarmoq)
+
+  certgen:
+    # Sertifikat yo'q bo'lsa — self-signed yaratadi (lokal). Prod'da deploy/nginx/certs ga haqiqiy sertifikat qo'ying.
+    image: alpine/openssl:3.5.9
+    entrypoint: ["sh", "/scripts/gen-self-signed.sh"]
+    environment:
+      SERVER_NAME: ${SERVER_NAME:-localhost}
+      S3_BUCKET: ${S3_BUCKET:-usta}
+      NGINX_API_RATE: ${NGINX_API_RATE:-30r/s}     # IP bo'yicha (CGNAT bo'lsa oshiring)
+      NGINX_API_BURST: ${NGINX_API_BURST:-60}
+      NGINX_AUTH_RATE: ${NGINX_AUTH_RATE:-5r/s}
+    volumes:
+      - ./deploy/nginx/certs:/certs
+      - ./deploy/nginx/scripts:/scripts:ro
+    restart: "no"
+
+  nginx:
+    image: nginx:1.30.6-alpine
+    <<: [*restart, *logging]
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits: { cpus: "${NGINX_CPUS:-0.25}", memory: "${NGINX_MEMORY:-128m}" }
+    depends_on:
+      certgen: { condition: service_completed_successfully }
+      api: { condition: service_healthy }
+      minio: { condition: service_started }
+    environment:
+      SERVER_NAME: ${SERVER_NAME:-localhost}
+      S3_BUCKET: ${S3_BUCKET:-usta}
+      NGINX_API_RATE: ${NGINX_API_RATE:-30r/s}     # IP bo'yicha (CGNAT bo'lsa oshiring)
+      NGINX_API_BURST: ${NGINX_API_BURST:-60}
+      NGINX_AUTH_RATE: ${NGINX_AUTH_RATE:-5r/s}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/nginx/templates:/etc/nginx/templates:ro
+      - ./deploy/nginx/certs:/etc/nginx/certs:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider --no-check-certificate https://127.0.0.1/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:v3.16.0
+    <<: [*restart, *logging]
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits: { cpus: "${PROMETHEUS_CPUS:-0.25}", memory: "${PROMETHEUS_MEMORY:-512m}" }
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - promdata:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_HOST_PORT:-9090}:9090"
+
+  grafana:
+    image: grafana/grafana:13.2
+    <<: [*restart, *logging]
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits: { cpus: "${GRAFANA_CPUS:-0.25}", memory: "${GRAFANA_MEMORY:-384m}" }
+    depends_on: [prometheus]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - "127.0.0.1:${GRAFANA_HOST_PORT:-3000}:3000"
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  promdata:
+  grafanadata:
