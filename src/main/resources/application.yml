@@ -134,6 +134,8 @@ app:
       per-ip-limit: 20
       per-ip-window: PT1H
       verify-per-ip-limit: 60
+      # Faqat lokal ishlab chiqish: doimiy kod (masalan 11111). SMS_PROVIDER=log bo'lmasa ilova ishga tushmaydi
+      fixed-code: ${OTP_FIXED_CODE:}
   sms:
     provider: ${SMS_PROVIDER:log}   # log | eskiz
     eskiz:
@@ -181,9 +183,12 @@ app:
     invoicing-cron: "0 5 * * * *"     # har soat: tugagan haftalarni yopadi (idempotent)
     reconciliation-cron: "0 30 2 * * *"
   push:
-    provider: ${PUSH_PROVIDER:log}
+    provider: ${PUSH_PROVIDER:log}   # log | fcm
+    fcm:
+      # Firebase service account JSON (Project settings → Service accounts → Generate new private key)
+      credentials-file: ${FIREBASE_CREDENTIALS_FILE:}
   warmup:
-    enabled: ${APP_WARMUP_ENABLED:true}   # trafikdan oldin JVM'ni isitish (docs/performance.md)   # log (FCM kalitlari berilganda — fcm)
+    enabled: ${APP_WARMUP_ENABLED:true}   # trafikdan oldin JVM'ni isitish (docs/performance.md)
   i18n:
     default-locale: uz
     supported-locales: uz,ru,en

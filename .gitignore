@@ -12,3 +12,5 @@ backups/
 *.log
 .deployed-image
 config/
+secrets/*
+!secrets/.gitkeep

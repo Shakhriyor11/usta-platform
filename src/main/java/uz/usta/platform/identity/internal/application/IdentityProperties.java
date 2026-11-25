@@ -14,7 +14,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record IdentityProperties(Otp otp, Duration refreshTokenTtl, Duration refreshReuseGrace, Set<String> adminPhones) {
 
     public IdentityProperties {
-        otp = otp == null ? new Otp(0, null, 0, null, 0, null, 0, null, 0) : otp;
+        otp = otp == null ? new Otp(0, null, 0, null, 0, null, 0, null, 0, null) : otp;
         refreshTokenTtl = refreshTokenTtl == null ? Duration.ofDays(30) : refreshTokenTtl;
         refreshReuseGrace = refreshReuseGrace == null ? Duration.ofSeconds(10) : refreshReuseGrace;
         adminPhones = adminPhones == null ? Set.of() : Set.copyOf(adminPhones);
@@ -28,10 +28,12 @@ public record IdentityProperties(Otp otp, Duration refreshTokenTtl, Duration ref
      * @param perPhoneLimit   bir raqamga {@code perPhoneWindow} ichida yuboriladigan SMS soni
      * @param perIpLimit      bir IP'dan {@code perIpWindow} ichida OTP so'rovlari soni
      * @param verifyPerIpLimit bir IP'dan {@code perIpWindow} ichida tekshirish so'rovlari soni
+     * @param fixedCode       FAQAT lokal ishlab chiqish uchun: berilsa, tasodifiy kod o'rniga shu kod ishlatiladi.
+     *                        {@code app.sms.provider=log} bo'lmasa ilova ishga tushmaydi
      */
     public record Otp(int length, Duration ttl, int maxAttempts, Duration resendCooldown,
                       int perPhoneLimit, Duration perPhoneWindow, int perIpLimit, Duration perIpWindow,
-                      int verifyPerIpLimit) {
+                      int verifyPerIpLimit, String fixedCode) {
         public Otp {
             length = length <= 0 ? 5 : length;
             ttl = ttl == null ? Duration.ofMinutes(2) : ttl;
@@ -42,6 +44,10 @@ public record IdentityProperties(Otp otp, Duration refreshTokenTtl, Duration ref
             perIpLimit = perIpLimit <= 0 ? 20 : perIpLimit;
             perIpWindow = perIpWindow == null ? Duration.ofHours(1) : perIpWindow;
             verifyPerIpLimit = verifyPerIpLimit <= 0 ? 60 : verifyPerIpLimit;
+            fixedCode = fixedCode == null || fixedCode.isBlank() ? null : fixedCode.strip();
+            if (fixedCode != null && !fixedCode.matches("\\d{" + length + "}")) {
+                throw new IllegalArgumentException("app.identity.otp.fixed-code " + length + " xonali raqam bo'lishi kerak");
+            }
         }
     }
 }

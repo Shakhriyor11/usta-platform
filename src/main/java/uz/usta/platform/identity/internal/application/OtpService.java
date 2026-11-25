@@ -11,6 +11,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import uz.usta.platform.identity.OtpDelivery;
@@ -46,13 +47,21 @@ public class OtpService {
     private final SecureRandom random = new SecureRandom();
 
     OtpService(StringRedisTemplate redis, OtpDelivery sms, RateLimiter rateLimiter, Messages messages,
-               IdentityProperties props, JwtProperties jwt) {
+               IdentityProperties props, JwtProperties jwt,
+               @Value("${app.sms.provider:log}") String smsProvider) {
         this.redis = redis;
         this.sms = sms;
         this.rateLimiter = rateLimiter;
         this.messages = messages;
         this.cfg = props.otp();
         this.hmacKey = new SecretKeySpec(jwt.secretBytes(), "HmacSHA256");
+        if (cfg.fixedCode() != null) {
+            if (!"log".equalsIgnoreCase(smsProvider)) {
+                throw new IllegalStateException(
+                        "app.identity.otp.fixed-code faqat app.sms.provider=log bilan ishlatiladi (hozir: " + smsProvider + ")");
+            }
+            log.warn("DIQQAT: OTP kodi doimiy ({} belgi) — faqat lokal ishlab chiqish uchun!", cfg.fixedCode().length());
+        }
     }
 
     public record Challenge(long expiresInSeconds, long resendAfterSeconds, int codeLength) {
@@ -126,6 +135,9 @@ public class OtpService {
     }
 
     private String generateCode() {
+        if (cfg.fixedCode() != null) {
+            return cfg.fixedCode();
+        }
         int bound = (int) Math.pow(10, cfg.length());
         return String.format("%0" + cfg.length() + "d", random.nextInt(bound));
     }

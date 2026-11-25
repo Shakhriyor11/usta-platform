@@ -2,6 +2,7 @@ package uz.usta.platform.storage.internal;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +14,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.http.ContentStreamProvider;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
@@ -88,9 +90,18 @@ class S3FileStorage implements FileStorage {
 
     private void put(String key, String type, MultipartFile file) {
         PutObjectRequest req = PutObjectRequest.builder().bucket(props.bucket()).key(key).contentType(type).build();
-        try (InputStream in = file.getInputStream()) {
-            s3.putObject(req, RequestBody.fromInputStream(in, file.getSize()));
-        } catch (IOException e) {
+        // SDK qayta urinishda (retry) oqimni boshidan o'qiy olishi uchun har safar yangi InputStream ochiladi.
+        // fromInputStream(...) mark/reset qo'llamaydigan oqimda retry paytida IllegalStateException beradi.
+        ContentStreamProvider body = () -> {
+            try {
+                return file.getInputStream();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        };
+        try {
+            s3.putObject(req, RequestBody.fromContentProvider(body, file.getSize(), type));
+        } catch (UncheckedIOException e) {
             throw new BusinessException(StorageErrorCode.FILE_EMPTY);
         }
     }

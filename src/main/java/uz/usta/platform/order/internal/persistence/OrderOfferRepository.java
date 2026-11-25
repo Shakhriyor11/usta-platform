@@ -37,11 +37,6 @@ public interface OrderOfferRepository extends JpaRepository<OrderOffer, UUID> {
             where f.orderId = :orderId and f.status = uz.usta.platform.order.internal.domain.OfferStatus.PENDING""")
     int closePending(@Param("orderId") UUID orderId, @Param("result") OfferStatus result, @Param("now") Instant now);
 
-    @Query("""
-            select distinct f.orderId from OrderOffer f
-            where f.status = uz.usta.platform.order.internal.domain.OfferStatus.PENDING and f.expiresAt <= :now""")
-    List<UUID> findOrdersWithExpiredOffers(@Param("now") Instant now);
-
     @Modifying(flushAutomatically = true)
     @Query("""
             update OrderOffer f set f.status = uz.usta.platform.order.internal.domain.OfferStatus.EXPIRED,

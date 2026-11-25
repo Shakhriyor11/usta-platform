@@ -295,7 +295,9 @@ saqlanadi.
 Bildirishnomalar order/review eventlaridan yaratiladi (`notifications`). Bir xil event qayta kelsa, bir
 foydalanuvchiga ikkinchi marta yozilmaydi: `(source_event_id, user_id)` UNIQUE. Matn turi va argumentlari
 saqlanadi va o'qish paytida `Accept-Language` tilida hosil qilinadi. Push commit'dan keyin har qurilmaga o'z
-tilida yuboriladi (`push_tokens.locale`). Adapter `PushSender`: hozircha `log`, FCM kalitlari kelganda `fcm`.
+tilida yuboriladi (`push_tokens.locale`). Yuborish alohida virtual thread'larda (bir vaqtda ≤ 32 ta) — FCM HTTP
+chaqiruvi outbox relay'ni va DB ulanishini band qilmaydi. Adapter `PushSender`: `log` (stub) yoki `fcm`
+(`FIREBASE_CREDENTIALS_FILE`, HTTP v1, qo'shimcha SDK'siz).
 
 ## 16. To'lov, komissiya va ledger (P4)
 
