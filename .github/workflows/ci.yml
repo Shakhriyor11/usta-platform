@@ -95,7 +95,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}/api
           # type=ref,event=tag -> "v1.2.3" (deploy aynan shu tegni tortadi), semver -> "1.2.3"
