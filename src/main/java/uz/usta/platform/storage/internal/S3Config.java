@@ -19,7 +19,12 @@ class S3Config {
                 .endpointOverride(props.endpoint())
                 .region(Region.of(props.region()))
                 .credentialsProvider(credentials(props))
-                .forcePathStyle(props.pathStyle())
+                .serviceConfiguration(S3Configuration.builder()
+                        .pathStyleAccessEnabled(props.pathStyle())
+                        // Cloudflare R2 va boshqa S3-mos omborlar SDK'ning bo'lakli (aws-chunked) imzosini qabul
+                        // qilmaydi — yuklash 403 bilan yiqiladi. MinIO va AWS S3 ikkala usulni ham qabul qiladi.
+                        .chunkedEncodingEnabled(false)
+                        .build())
                 .httpClientBuilder(UrlConnectionHttpClient.builder())
                 .build();
     }
