@@ -26,7 +26,7 @@ jobs:
           distribution: temurin
           java-version: "25"
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       # Testcontainers GitHub runner'idagi Docker'dan foydalanadi (PostGIS, Redis).
       - name: Build, unit + integration + ArchUnit/Modulith tests
