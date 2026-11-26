@@ -31,6 +31,7 @@ import uz.usta.platform.complaint.internal.domain.ComplaintReason;
 import uz.usta.platform.complaint.internal.domain.ComplaintStatus;
 import uz.usta.platform.order.OrderApi.DisputeResolution;
 import uz.usta.platform.shared.security.AuthenticatedUser;
+import uz.usta.platform.shared.validation.PlainText;
 import uz.usta.platform.shared.web.ApiPaths;
 import uz.usta.platform.shared.web.PageResponse;
 
@@ -44,15 +45,15 @@ class ComplaintController {
     }
 
     record FileRequest(@NotNull UUID orderId, @NotNull ComplaintReason reason,
-                       @Schema(example = "Usta kelishilgan vaqtda kelmadi") @NotBlank @Size(max = 2000) String description,
+                       @Schema(example = "Usta kelishilgan vaqtda kelmadi") @NotBlank @Size(max = 2000) @PlainText String description,
                        @Schema(description = "true — buyurtma bo'yicha nizo ochish (IN_PROGRESS/COMPLETED/COMMISSION)")
                        Boolean dispute) {
     }
 
-    record CloseRequest(@NotNull Result result, @NotBlank @Size(max = 2000) String note,
+    record CloseRequest(@NotNull Result result, @NotBlank @Size(max = 2000) @PlainText String note,
                         @Schema(description = "Nizo ochiq bo'lsa majburiy") DisputeResolution orderResolution,
                         @Schema(description = "orderResolution=COMPLETED va narx kiritilmagan bo'lsa")
-                        @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal price) {
+                        @DecimalMin("1") @Digits(integer = 12, fraction = 2) BigDecimal price) {
         enum Result { RESOLVED, REJECTED }
     }
 

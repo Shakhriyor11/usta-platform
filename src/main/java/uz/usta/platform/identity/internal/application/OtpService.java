@@ -18,6 +18,7 @@ import uz.usta.platform.identity.OtpDelivery;
 import uz.usta.platform.identity.internal.domain.IdentityErrorCode;
 import uz.usta.platform.identity.internal.domain.PhoneNumber;
 import uz.usta.platform.shared.error.BusinessException;
+import uz.usta.platform.shared.error.CommonErrorCode;
 import uz.usta.platform.shared.i18n.Messages;
 import uz.usta.platform.shared.ratelimit.RateLimiter;
 import uz.usta.platform.shared.security.JwtProperties;
@@ -27,6 +28,7 @@ import uz.usta.platform.shared.security.JwtProperties;
  * <ul>
  *   <li>{@code otp:{phone}} — hash: {@code h} (kodning HMAC'i), {@code a} (urinishlar); TTL = {@code otp.ttl}</li>
  *   <li>{@code otp:cd:{phone}} — qayta yuborish cooldown'i</li>
+ *   <li>{@code otp:fail:{phone}} — 24 soatlik noto'g'ri urinishlar (muvaffaqiyatli kirishda o'chadi)</li>
  *   <li>{@code rl:otp-request:*}, {@code rl:otp-verify:*} — rate limit hisoblagichlari</li>
  * </ul>
  * Kodning o'zi saqlanmaydi: Redis sizib chiqsa ham HMAC kalitisiz kodni tiklab bo'lmaydi.
@@ -37,6 +39,7 @@ public class OtpService {
     private static final Logger log = LoggerFactory.getLogger(OtpService.class);
     private static final String HASH = "h";
     private static final String ATTEMPTS = "a";
+    private static final Duration DAY = Duration.ofDays(1);
 
     private final StringRedisTemplate redis;
     private final OtpDelivery sms;
@@ -69,6 +72,7 @@ public class OtpService {
 
     public Challenge request(String phone, String clientIp) {
         rateLimiter.consume("otp-request:ip", clientIp, cfg.perIpLimit(), cfg.perIpWindow());
+        requireGuessBudget(phone);
         String cooldownKey = "otp:cd:" + phone;
         Boolean first = redis.opsForValue().setIfAbsent(cooldownKey, "1", cfg.resendCooldown());
         if (!Boolean.TRUE.equals(first)) {
@@ -78,6 +82,7 @@ public class OtpService {
                     retryAfter);
         }
         rateLimiter.consume("otp-request:phone", phone, cfg.perPhoneLimit(), cfg.perPhoneWindow());
+        rateLimiter.consume("otp-request:phone-day", phone, cfg.perPhoneDailyLimit(), DAY);
 
         String code = generateCode();
         String key = otpKey(phone);
@@ -98,6 +103,7 @@ public class OtpService {
     /** Kodni tekshiradi; muvaffaqiyatli bo'lsa kod bir martalik sifatida o'chiriladi. */
     public void verify(String phone, String code, String clientIp) {
         rateLimiter.consume("otp-verify:ip", clientIp, cfg.verifyPerIpLimit(), cfg.perIpWindow());
+        requireGuessBudget(phone);
         String key = otpKey(phone);
         if (!Boolean.TRUE.equals(redis.hasKey(key))) {
             throw new BusinessException(IdentityErrorCode.OTP_EXPIRED);
@@ -116,6 +122,7 @@ public class OtpService {
         boolean matches = MessageDigest.isEqual(stored.toString().getBytes(StandardCharsets.US_ASCII),
                 hash(phone, code).getBytes(StandardCharsets.US_ASCII));
         if (!matches) {
+            recordFailure(phone);
             long remaining = cfg.maxAttempts() - attempts;
             if (remaining <= 0) {
                 redis.delete(key);
@@ -128,6 +135,28 @@ public class OtpService {
             throw new BusinessException(IdentityErrorCode.OTP_EXPIRED);
         }
         redis.delete("otp:cd:" + phone);
+        redis.delete(failuresKey(phone));
+    }
+
+    /** Kunlik noto'g'ri urinishlar tugagan bo'lsa — yangi kod so'rash ham, tekshirish ham 429. */
+    private void requireGuessBudget(String phone) {
+        String failures = redis.opsForValue().get(failuresKey(phone));
+        if (failures != null && Long.parseLong(failures) >= cfg.maxFailuresPerDay()) {
+            Long ttl = redis.getExpire(failuresKey(phone));
+            throw new BusinessException(CommonErrorCode.TOO_MANY_REQUESTS,
+                    Map.of("retryAfterSeconds", ttl == null || ttl < 1 ? 1 : ttl));
+        }
+    }
+
+    private void recordFailure(String phone) {
+        Long count = redis.opsForValue().increment(failuresKey(phone));
+        if (count != null && count == 1) {
+            redis.expire(failuresKey(phone), DAY);
+        }
+    }
+
+    private static String failuresKey(String phone) {
+        return "otp:fail:" + phone;
     }
 
     Duration ttl() {

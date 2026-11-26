@@ -12,7 +12,10 @@ import java.util.UUID;
  */
 public interface MasterMatcher {
 
-    /** Eng yaqin ustalar (masofa bo'yicha, teng bo'lsa — reyting). */
+    /**
+     * Avval online ustalar (masofa bo'yicha, teng bo'lsa — reyting), {@code limit} ga yetmasa — offline ustalar
+     * ham shu tartibda.
+     */
     List<Candidate> nearest(UUID serviceId, double latitude, double longitude, int limit,
                             Collection<UUID> excludeMasterIds);
 

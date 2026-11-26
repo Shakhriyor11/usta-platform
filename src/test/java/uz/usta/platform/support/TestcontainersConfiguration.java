@@ -15,7 +15,8 @@ public class TestcontainersConfiguration {
 
     public static final String POSTGIS_IMAGE = "postgis/postgis:17-3.6";
     public static final String REDIS_IMAGE = "redis:8.6-alpine";
-    public static final String MINIO_IMAGE = "cgr.dev/chainguard/minio:latest";
+    public static final String MINIO_IMAGE =
+            "cgr.dev/chainguard/minio@sha256:f2e56aceb4d38ad9b05c901270946e2353b19f86ba4396f25cf75b15b455b38c";
     private static final String MINIO_USER = "test-minio";
     private static final String MINIO_PASSWORD = "test-minio-secret";
 

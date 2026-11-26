@@ -25,6 +25,13 @@ class JpaUserDirectory implements UserDirectory {
         if (userIds.isEmpty()) {
             return Map.of();
         }
-        return users.findAllById(userIds).stream().collect(Collectors.toMap(User::getId, User::getPhone));
+        return users.findAllById(userIds).stream().filter(u -> u.getPhone() != null) // o'chirilganlarda yo'q
+                .collect(Collectors.toMap(User::getId, User::getPhone));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isDeleted(UUID userId) {
+        return users.findById(userId).filter(User::isDeleted).isPresent();
     }
 }

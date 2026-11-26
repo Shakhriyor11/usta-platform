@@ -88,8 +88,12 @@ Ikki rejimda pastki navigatsiya va bosh sahifa har xil bo'ladi.
 
 ## 5. Katalog (seed ma'lumotlari, ikonkalar uchun)
 
-Kategoriyalar daraxtsimon (3 darajagacha). Har kategoriyada `icon` kaliti bor, dizaynda shu kalit uchun
-ikonka chizilsin.
+Kategoriyalar daraxtsimon (3 darajagacha). Kategoriya va xizmat javobida:
+- `iconUrl` — ko'rsatiladigan ikonka: tayyor to'plamdan SVG (nisbiy yo'l, `/api/v1/public/catalog/icons/…svg`,
+  bir rangli chiziqli — rangini ilova beradi) yoki admin yuklagan PNG/WEBP (to'liq havola). `null` bo'lishi mumkin —
+  standart ikonka ko'rsating.
+- `imageUrl` — ixtiyoriy rasm (15 daqiqalik havola); yo'q bo'lsa kartochka faqat ikonka bilan.
+- `name` — `Accept-Language` bo'yicha (`uz`, `uz-Cyrl`, `ru`, `en`).
 
 | Ikonka kaliti | Kategoriya (uz / ru / en) | Xizmatlar misoli |
 |---|---|---|
@@ -117,21 +121,21 @@ CREATED ──► SEARCHING ──► ACCEPTED ──► IN_PROGRESS ──► C
 | Status | Mijozga ko'rinadigan nom | Ustaga ko'rinadigan nom | Rang (tavsiya) | Ma'nosi |
 |---|---|---|---|---|
 | `CREATED` | Yaratildi | — | kulrang | Bir lahzalik, darhol SEARCHING'ga o'tadi |
-| `SEARCHING` | Usta qidirilmoqda | Yangi taklif | ko'k (animatsiya) | Ustalarga taklif yuborildi. Maksimum 15 daqiqa |
+| `SEARCHING` | Usta qidirilmoqda | Yangi taklif | ko'k (animatsiya) | Ustalarga taklif yuborildi. 15 daqiqa (rejalashtirilganda — vaqtidan 1 soat oldingacha). Usta voz kechsa buyurtma shu holatga qaytadi |
 | `ACCEPTED` | Usta topildi | Qabul qilindi | yashil-ko'k | Usta qabul qildi va yo'lda. Telefonlar ochiladi, chat ishlaydi |
 | `IN_PROGRESS` | Ish bajarilmoqda | Jarayonda | to'q sariq | Usta ishni boshladi |
 | `COMPLETED` | Bajarildi | Bajarildi | yashil | Usta yakunladi (bir lahzalik, darhol COMMISSION'ga o'tadi) |
 | `COMMISSION` | Bajarildi — baholang | Bajarildi | yashil | Yakuniy narx belgilandi, mijoz baholashi kutilmoqda |
 | `REVIEWED` | Yakunlandi | Yakunlandi | yashil (to'q) | Mijoz baholadi, buyurtma yopildi |
 | `CANCELLED` | Bekor qilindi | Bekor qilindi | qizil | Sabab `cancelReason` da |
-| `EXPIRED` | Usta topilmadi | Muddati o'tdi | kulrang | 15 daqiqada hech kim qabul qilmadi |
+| `EXPIRED` | Usta topilmadi | Muddati o'tdi | kulrang | Qidiruv muddatida hech kim qabul qilmadi |
 | `DISPUTED` | Nizo ko'rib chiqilmoqda | Nizo | qizil-to'q sariq | Admin hal qiladi |
 
 ### Kim qachon nima qila oladi
 | Amal | Kim | Qaysi statusda |
 |---|---|---|
 | Bekor qilish (sabab ixtiyoriy) | Mijoz | CREATED, SEARCHING, ACCEPTED |
-| Bekor qilish (**sabab majburiy**) | Usta | faqat ACCEPTED |
+| Voz kechish (**sabab majburiy**; buyurtma bekor bo'lmaydi, qayta qidiriladi) | Usta | faqat ACCEPTED |
 | Ishni boshlash | Usta | ACCEPTED |
 | Yakunlash (**yakuniy narx kiritadi**) | Usta | IN_PROGRESS |
 | Nizo ochish (sabab majburiy) | Ikkalasi | IN_PROGRESS, COMPLETED, COMMISSION |
@@ -143,6 +147,10 @@ CREATED ──► SEARCHING ──► ACCEPTED ──► IN_PROGRESS ──► C
 ### Taklif (usta tomonidan ko'rinadi) — `OfferStatus`
 `PENDING` (javob kutilmoqda, **5 daqiqa**) · `ACCEPTED` · `REJECTED` (rad etdi) · `EXPIRED` (javob bermadi) ·
 `CANCELLED` (boshqa usta oldi yoki mijoz bekor qildi).
+
+Rad etilgan, muddati o'tgan yoki boshqa usta olgan taklifning buyurtmasi endi ochilmaydi (404) — ro'yxatdan olib
+tashlang. Komissiya to'lovi muddati o'tgan ustaga taklif kelmaydi va qabul qilishda `MASTER_HAS_OVERDUE_DEBT`
+qaytadi (moliya ekranida `overdue: true` banneri kerak).
 
 Usta rad etsa, buyurtma keyingi ustalarga o'tadi. Ikki usta bir vaqtda "Qabul qilish"ni bossa, faqat bittasi
 oladi, ikkinchisiga **"Bu buyurtmani boshqa usta qabul qilib bo'ldi"** xabari chiqadi. Bu holat uchun ham
@@ -247,7 +255,9 @@ Xatolar: "Tanlangan usta bu xizmat yoki manzil uchun mavjud emas", "O'zingizga b
 
 ### M7. Usta qidirilmoqda (SEARCHING) — to'liq ekran holati
 - Animatsiya (radar yoki pulsatsiya), "Yaqin atrofdagi ustalarga yuborildi".
-- **Qolgan vaqt taymeri** (`searchDeadline` gacha, maksimum 15 daqiqa).
+- **Qolgan vaqt taymeri** (`searchDeadline` gacha; rejalashtirilgan buyurtmada kunlar bo'lishi mumkin).
+- **Taxminiy narx:** "90 000 – 140 000 so'm dan" (`estimatedPriceMin/Max`; usta topilmaguncha bo'sh bo'lishi
+  mumkin).
 - Buyurtma qisqacha: xizmat, manzil, vaqt.
 - Tugma: "Buyurtmani bekor qilish" (sabab so'raladi, ixtiyoriy).
 - Usta qabul qilganda push keladi va ekran avtomatik M8 ga o'tadi.
@@ -286,7 +296,9 @@ dizayn g'oyasi: "Tez", "Sifatli", "Toza", "Xushmuomala"). "Yuborish" tugmasi. Mu
 - Xabarlar pufakchalari (matn, 2000 belgigacha), vaqt, **o'qildi ✓✓** (ikkinchi tomon qachongacha o'qiganiga qarab).
 - Real vaqt (WebSocket). Eski xabarlar yuqoriga scroll qilganda yuklanadi.
 - Yozish mumkin bo'lmasa (buyurtma yopilgan): pastda "Buyurtma yopilgan — chat faqat o'qish uchun" banneri.
-- Faqat matnli chat (rasm yuborish backend'da hozircha yo'q).
+- **Rasm yuborish** (kamera yoki galereya, JPEG/PNG/WEBP, 10 MB, ixtiyoriy izoh): `POST /orders/{id}/chat/images`.
+  Xabarda `imageUrl` bo'lsa rasm pufakchasi (bosilganda to'liq ekran); havola 15 daqiqalik — muddati o'tsa xabarlarni
+  qayta yuklang. Yuklanish jarayoni va xato holati kerak.
 
 ### M12. Shikoyat yuborish
 - Buyurtma (avtomatik), **sabab:** Sifat yomon (`QUALITY`) · Kelmadi (`NO_SHOW`) · Narx bo'yicha (`PRICE`) ·
@@ -333,6 +345,9 @@ ko'rinadi. Verifikatsiyaga yuborish uchun majburiy.
 **U3. Xizmatlar va narxlar**
 Katalogdan xizmatlarni tanlash (**50 tagacha**). Har xizmat uchun: **"narx dan" (so'm)**, izoh ("Materiallar
 mijozdan"), faol/nofaol switch.
+
+Verifikatsiyaga yuborilgandan keyin (PENDING, APPROVED) **ism va avatar o'zgartirilmaydi** (`IDENTITY_LOCKED`) —
+maydonlarni qulflangan holda ko'rsating.
 
 **U4. Hujjatlar**
 - Majburiy: **Pasport** (`PASSPORT`), **Selfi** (`SELFIE`). Ixtiyoriy: Sertifikat (`CERTIFICATE`), Boshqa (`OTHER`).
@@ -425,7 +440,8 @@ Chat, shikoyat va bildirishnomalar ekranlari mijozdagi bilan bir xil (M11–M13)
 | `NEW_OFFER` | Usta | Yangi buyurtma | 2.4 km uzoqlikda yangi buyurtma. Javob berish uchun 5 daqiqa vaqtingiz bor |
 | `ORDER_ACCEPTED` | Mijoz | Usta topildi | Usta buyurtmangizni qabul qildi. Bog'lanish uchun buyurtmani oching |
 | `ORDER_STARTED` | Mijoz | Ish boshlandi | Usta ishni boshladi |
-| `ORDER_COMPLETED` | Mijoz | Ish yakunlandi | Usta ishni yakunladi. Iltimos, ustani baholang |
+| `ORDER_COMPLETED` | Mijoz | Ish yakunlandi | Usta ishni yakunladi. Yakuniy narx: 180000.00 UZS. Rozi bo'lmasangiz nizo oching, aks holda ustani baholang |
+| `ORDER_REOPENED` | Mijoz | Yangi usta qidirilmoqda | Usta buyurtmadan voz kechdi. Biz boshqa usta qidiryapmiz |
 | `ORDER_CANCELLED` | Ikkalasi | Buyurtma bekor qilindi | Sababini buyurtma tafsilotlarida ko'ring |
 | `ORDER_EXPIRED` | Mijoz | Usta topilmadi | Hech bir usta qabul qilmadi. Qaytadan urinib ko'ring |
 | `ORDER_DISPUTED` | Ikkalasi | Nizo ochildi | Administrator ko'rib chiqadi |
@@ -433,11 +449,13 @@ Chat, shikoyat va bildirishnomalar ekranlari mijozdagi bilan bir xil (M11–M13)
 | `NEW_REVIEW` | Usta | Yangi baho | Mijoz sizga 5 baho qo'ydi |
 | `COMMISSION_INVOICED` | Usta | Haftalik komissiya | O'tgan hafta 12 ta buyurtma uchun komissiya: 216 000 UZS. To'lov muddati: 01.12 |
 | `COMMISSION_SETTLED` | Usta | To'lov qabul qilindi | 18-noyabr haftasi uchun 216 000 UZS to'lovingiz qabul qilindi |
-| `CHAT_MESSAGE` | Ikkalasi | Yangi xabar | (xabar matni). Faqat push, in-app ro'yxatda chiqmaydi |
+| `CHAT_MESSAGE` | Ikkalasi | Yangi xabar | (xabar matni; izohsiz rasmda "Rasm yuborildi"). Faqat push, in-app ro'yxatda chiqmaydi |
 | `COMPLAINT_RESOLVED` | Muallif | Shikoyat ko'rib chiqildi | Batafsil — shikoyatlar bo'limida |
 | `COMPLAINT_REJECTED` | Muallif | Shikoyat rad etildi | Sababini shikoyatlar bo'limida ko'ring |
 
 Har bildirishnoma bosilganda `data.orderId` bo'yicha buyurtma ochiladi.
+
+Chiqishda (`POST /auth/logout`) shu qurilmaning `pushToken` ini ham yuboring — aks holda push kelaveradi.
 
 ---
 
@@ -450,6 +468,8 @@ Har bildirishnoma bosilganda `data.orderId` bo'yicha buyurtma ochiladi.
 - **Internet yo'q:** yuqorida banner, oxirgi ma'lumotlar ko'rinib turadi.
 - **Hisob bloklangan:** to'liq ekran: "Hisobingiz bloklangan. Qo'llab-quvvatlash xizmatiga murojaat qiling".
 - **Sessiya tugagan:** telefon ekraniga qaytaradi.
+- **O'chirilgan hisob:** administrator hisobni o'chirsa, ilova sessiyani tozalab telefon ekraniga qaytadi.
+  Suhbatdosh o'chirilgan bo'lsa ismi "O'chirilgan foydalanuvchi" yoki bo'sh keladi.
 - **Ruxsatlar:** joylashuv (manzil va usta ish hududi uchun), kamera/galereya (rasmlar va hujjatlar uchun),
   bildirishnomalar. Har biri uchun tushuntiruvchi oldindan ekran (pre-permission).
 - **Tasdiqlash dialoglari:** bekor qilish, nizo ochish, hujjat yoki manzilni o'chirish, chiqish.
@@ -478,7 +498,7 @@ xarita pin va radius aylanasi · hujjat yuklash kartochkasi.
 ## 13. Hozircha YO'Q narsalar (dizayn qilmang yoki "keyin" deb belgilang)
 
 - Ilova ichida onlayn to'lov (Click/Payme/Uzum): faqat naqd. Kelajak uchun joy qoldirish mumkin.
-- Chatda rasm/ovozli xabar: faqat matn.
+- Chatda ovozli xabar, video va fayl: faqat matn va rasm.
 - Ustalarni xaritada nuqta sifatida ko'rsatish (maxfiylik sababli).
 - Narx bo'yicha savdolashish yoki mijozning o'z narxini taklif qilishi: usta "narx dan" belgilaydi, yakuniy narxni usta kiritadi.
 - Sevimli ustalar, promo-kodlar, referal: backend'da yo'q.

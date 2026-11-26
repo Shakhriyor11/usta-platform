@@ -15,6 +15,7 @@ import java.util.UUID;
 import uz.usta.platform.order.internal.application.AdminOrderService.Resolution;
 import uz.usta.platform.order.internal.domain.OfferStatus;
 import uz.usta.platform.order.internal.domain.OrderStatus;
+import uz.usta.platform.shared.validation.PlainText;
 import uz.usta.platform.shared.web.GeoPoint;
 
 final class OrderDtos {
@@ -27,7 +28,7 @@ final class OrderDtos {
     @Schema(description = "Manzil: addressId (saqlangan) yoki address (shu buyurtma uchun) — bittasi majburiy")
     record CreateOrderRequest(
             @NotNull UUID serviceId,
-            @Schema(example = "Oshxonadagi jo'mrak oqyapti, almashtirish kerak") @NotBlank @Size(max = 2000) String description,
+            @Schema(example = "Oshxonadagi jo'mrak oqyapti, almashtirish kerak") @NotBlank @Size(max = 2000) @PlainText String description,
             UUID addressId,
             @Valid InlineAddress address,
             @Schema(description = "Rejalashtirilgan vaqt (ISO-8601). Bo'sh — imkon qadar tez") Instant scheduledAt,
@@ -35,27 +36,27 @@ final class OrderDtos {
     }
 
     record InlineAddress(
-            @Schema(example = "Toshkent, Chilonzor 9-kvartal, 12-uy") @NotBlank @Size(max = 500) String address,
-            @Size(max = 255) String details,
+            @Schema(example = "Toshkent, Chilonzor 9-kvartal, 12-uy") @NotBlank @Size(max = 500) @PlainText String address,
+            @Size(max = 255) @PlainText String details,
             @NotNull @Valid GeoPoint location) {
     }
 
-    record CancelRequest(@Size(max = 500) String reason) {
+    record CancelRequest(@Size(max = 500) @PlainText String reason) {
     }
 
-    record ReasonRequest(@NotBlank @Size(max = 500) String reason) {
+    record ReasonRequest(@NotBlank @Size(max = 500) @PlainText String reason) {
     }
 
     record CompleteRequest(
-            @Schema(example = "180000", description = "Yakuniy narx, UZS") @NotNull @DecimalMin("0")
+            @Schema(example = "180000", description = "Yakuniy narx, UZS (musbat)") @NotNull @DecimalMin("1")
             @DecimalMax("999999999999.99") @Digits(integer = 12, fraction = 2) BigDecimal price) {
     }
 
     record ResolveDisputeRequest(
             @NotNull Resolution resolution,
-            @Schema(description = "COMPLETED uchun: narx hali kiritilmagan bo'lsa majburiy") @DecimalMin("0")
+            @Schema(description = "COMPLETED uchun: narx hali kiritilmagan bo'lsa majburiy") @DecimalMin("1")
             @DecimalMax("999999999999.99") @Digits(integer = 12, fraction = 2) BigDecimal price,
-            @NotBlank @Size(max = 500) String note) {
+            @NotBlank @Size(max = 500) @PlainText String note) {
     }
 
     // ---------------------------------------------------------------- javoblar
@@ -87,9 +88,12 @@ final class OrderDtos {
                         Instant createdAt) {
     }
 
-    @Schema(description = "Mijoz uchun buyurtma. priceFrom — qabul qilgan ustaning \"narx dan\" qiymati, price — yakuniy narx")
+    @Schema(description = "Mijoz uchun buyurtma. estimatedPriceMin/Max — faqat qidiruv paytida (SEARCHING): taklif "
+            + "yuborilgan ustalarning \"narx dan\" oralig'i (usta topilmaguncha bo'sh bo'lishi mumkin). priceFrom — "
+            + "qabul qilgan ustaning \"narx dan\" qiymati, price — yakuniy narx")
     record OrderResponse(UUID id, OrderStatus status, UUID serviceId, String serviceName, String description,
-                         AddressResponse address, Instant scheduledAt, Instant searchDeadline, BigDecimal priceFrom,
+                         AddressResponse address, Instant scheduledAt, Instant searchDeadline,
+                         BigDecimal estimatedPriceMin, BigDecimal estimatedPriceMax, BigDecimal priceFrom,
                          BigDecimal price, MasterBrief master, List<AttachmentResponse> attachments,
                          List<HistoryResponse> history, String cancelReason, Instant createdAt, Instant acceptedAt,
                          Instant startedAt, Instant completedAt, Instant closedAt) {

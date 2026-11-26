@@ -5,6 +5,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.context.annotation.Bean;
@@ -51,18 +52,29 @@ class JwtSecurityConfig {
     @Bean
     Converter<Jwt, AbstractAuthenticationToken> jwtAuthenticationConverter() {
         return jwt -> {
-            List<String> claimRoles = jwt.getClaimAsStringList(AccessTokenIssuer.CLAIM_ROLES);
             Set<Role> roles = EnumSet.noneOf(Role.class);
-            if (claimRoles != null) {
-                for (String r : claimRoles) {
-                    roles.add(Role.valueOf(r));
-                }
+            claimList(jwt, AccessTokenIssuer.CLAIM_ROLES).forEach(r -> roles.add(Role.valueOf(r)));
+            Set<AdminPermission> permissions = EnumSet.noneOf(AdminPermission.class);
+            if (roles.contains(Role.SUPER_ADMIN)) {
+                roles.add(Role.ADMIN);
+                permissions.addAll(EnumSet.allOf(AdminPermission.class));
+            } else if (roles.contains(Role.ADMIN)) {
+                claimList(jwt, AccessTokenIssuer.CLAIM_PERMISSIONS)
+                        .forEach(p -> permissions.add(AdminPermission.valueOf(p)));
             }
+            Number version = jwt.getClaim(AccessTokenIssuer.CLAIM_AUTHZ_VERSION);
             AuthenticatedUser user = new AuthenticatedUser(UUID.fromString(jwt.getSubject()),
-                    jwt.getClaimAsString(AccessTokenIssuer.CLAIM_PHONE), roles);
-            return UsernamePasswordAuthenticationToken.authenticated(user, jwt,
-                    roles.stream().map(r -> new SimpleGrantedAuthority(r.authority())).toList());
+                    jwt.getClaimAsString(AccessTokenIssuer.CLAIM_PHONE), roles, permissions,
+                    version == null ? 0 : version.intValue());
+            List<SimpleGrantedAuthority> authorities = Stream.concat(roles.stream().map(Role::authority),
+                    permissions.stream().map(AdminPermission::authority)).map(SimpleGrantedAuthority::new).toList();
+            return UsernamePasswordAuthenticationToken.authenticated(user, jwt, authorities);
         };
+    }
+
+    private static List<String> claimList(Jwt jwt, String claim) {
+        List<String> values = jwt.getClaimAsStringList(claim);
+        return values == null ? List.of() : values;
     }
 
     private static SecretKey secretKey(JwtProperties props) {

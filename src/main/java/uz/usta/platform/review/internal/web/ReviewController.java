@@ -29,6 +29,7 @@ import uz.usta.platform.profile.CustomerDirectory;
 import uz.usta.platform.review.internal.application.ReviewService;
 import uz.usta.platform.review.internal.domain.Review;
 import uz.usta.platform.shared.security.AuthenticatedUser;
+import uz.usta.platform.shared.validation.PlainText;
 import uz.usta.platform.shared.web.ApiPaths;
 import uz.usta.platform.shared.web.PageResponse;
 
@@ -45,7 +46,7 @@ class ReviewController {
     }
 
     record ReviewRequest(@Schema(example = "5") @NotNull @Min(1) @Max(5) Integer rating,
-                         @Schema(example = "Tez va sifatli ishladi") @Size(max = 2000) String comment) {
+                         @Schema(example = "Tez va sifatli ishladi") @Size(max = 2000) @PlainText String comment) {
     }
 
     record ReviewResponse(UUID id, UUID orderId, UUID masterId, int rating, String comment, Instant createdAt) {

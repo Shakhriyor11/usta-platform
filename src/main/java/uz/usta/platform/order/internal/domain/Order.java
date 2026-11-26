@@ -61,6 +61,10 @@ public class Order extends AuditableEntity {
     @Column(name = "search_deadline", nullable = false)
     private Instant searchDeadline;
 
+    /** Oxirgi marta ustalarga taqsimlashga urinilgan vaqt — fon vazifasi navbatni shu bo'yicha tuzadi. */
+    @Column(name = "dispatch_attempted_at")
+    private Instant dispatchAttemptedAt;
+
     @Column(name = "price_from", precision = 14, scale = 2)
     private BigDecimal priceFrom;
 
@@ -137,8 +141,26 @@ public class Order extends AuditableEntity {
         this.priceFrom = priceFrom;
     }
 
+    /** @throws BusinessException PRICE_NOT_POSITIVE — komissiyadan qochmaslik uchun narx musbat bo'lishi shart */
     public void setFinalPrice(BigDecimal price) {
-        this.price = price.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal rounded = price.setScale(2, RoundingMode.HALF_UP);
+        if (rounded.signum() <= 0) {
+            throw new BusinessException(OrderErrorCode.PRICE_NOT_POSITIVE);
+        }
+        this.price = rounded;
+    }
+
+    /** Biriktirilgan usta voz kechdi: qidiruv yangi muddat bilan qayta boshlanadi (status — {@link #moveTo}). */
+    public void releaseMaster(Instant newSearchDeadline) {
+        this.masterId = null;
+        this.priceFrom = null;
+        this.acceptedAt = null;
+        this.dispatchAttemptedAt = null;
+        this.searchDeadline = newSearchDeadline;
+    }
+
+    public void markDispatchAttempt(Instant at) {
+        this.dispatchAttemptedAt = at;
     }
 
     public void recordCommission(BigDecimal amount) {

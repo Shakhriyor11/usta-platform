@@ -30,14 +30,16 @@ public class InvoicingService {
 
     private final CommissionReportRepository reports;
     private final BillingPeriods periods;
+    private final MasterAccount account;
     private final OutboxPublisher outbox;
     private final TransactionTemplate tx;
     private final Clock clock;
 
-    InvoicingService(CommissionReportRepository reports, BillingPeriods periods, OutboxPublisher outbox,
-                     TransactionTemplate tx, Clock clock) {
+    InvoicingService(CommissionReportRepository reports, BillingPeriods periods, MasterAccount account,
+                     OutboxPublisher outbox, TransactionTemplate tx, Clock clock) {
         this.reports = reports;
         this.periods = periods;
+        this.account = account;
         this.outbox = outbox;
         this.tx = tx;
         this.clock = clock;
@@ -67,13 +69,18 @@ public class InvoicingService {
     }
 
     private int invoice(UUID masterId, LocalDate period, Instant now) {
+        account.lock(masterId);
         if (reports.invoice(masterId, period, now) == 0) {
             return 0; // parallel instansiya allaqachon yopgan
         }
+        account.applyCredit(masterId, now);
         List<CommissionReport> rows = reports.findByMasterPeriodStatus(masterId, period, CommissionStatus.INVOICED);
         BigDecimal total = rows.stream().map(CommissionReport::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        outbox.publish(PaymentEvents.AGGREGATE, masterId, PaymentEvents.COMMISSION_INVOICED,
-                new PaymentEvents.CommissionInvoiced(masterId, period, total, rows.size(), periods.dueDate(period)));
+        BigDecimal due = account.due(masterId, total);
+        if (due.signum() > 0) { // ortiqcha to'lov to'liq qoplagan bo'lsa — ustadan hech narsa talab qilinmaydi
+            outbox.publish(PaymentEvents.AGGREGATE, masterId, PaymentEvents.COMMISSION_INVOICED,
+                    new PaymentEvents.CommissionInvoiced(masterId, period, due, rows.size(), periods.dueDate(period)));
+        }
         return 1;
     }
 }

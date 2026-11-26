@@ -37,8 +37,9 @@ public class MasterSearchService {
     /** Saralash: RATING — reyting ↓, baholar soni ↓, masofa ↑ (standart); DISTANCE; PRICE. */
     public enum SearchSort { RATING, DISTANCE, PRICE }
 
-    public record Query(UUID userId, UUID serviceId, UUID categoryId, Double latitude, Double longitude,
-                        UUID addressId, Integer radiusKm, BigDecimal minRating, BigDecimal priceMin,
+    /** @param excludeSelf so'rovchi ham usta — o'zini natijada ko'rmaydi */
+    public record Query(UUID userId, boolean excludeSelf, UUID serviceId, UUID categoryId, Double latitude,
+                        Double longitude, UUID addressId, Integer radiusKm, BigDecimal minRating, BigDecimal priceMin,
                         BigDecimal priceMax, boolean onlineOnly, SearchSort sort, int page, int size) {
     }
 
@@ -78,14 +79,16 @@ public class MasterSearchService {
         int radiusKm = Math.min(q.radiusKm() == null ? props.defaultRadiusKm() : q.radiusKm(), props.maxRadiusKm());
         Sort sort = q.sort() == null ? Sort.RATING : Sort.valueOf(q.sort().name());
 
+        // faqat usta o'zini natijadan chiqaradi; boshqalarning bir xil so'rovi umumiy kesh kalitiga tushadi
+        UUID excludeId = q.excludeSelf() ? q.userId() : null;
         SearchIndexRepository.Page page;
         if (q.onlineOnly()) {
             // online ro'yxat tez o'zgaradi — keshlanmaydi
             page = index.search(new Criteria(serviceIds, lat, lng, radiusKm * 1000, q.minRating(), q.priceMin(),
-                    q.priceMax(), presence.allOnline(), q.userId(), sort, q.page(), q.size()));
+                    q.priceMax(), presence.allOnline(), excludeId, sort, q.page(), q.size()));
         } else {
             Criteria c = new Criteria(serviceIds, round(lat), round(lng), radiusKm * 1000, q.minRating(),
-                    q.priceMin(), q.priceMax(), null, q.userId(), sort, q.page(), q.size());
+                    q.priceMin(), q.priceMax(), null, excludeId, sort, q.page(), q.size());
             page = cache.get(c.toString(), () -> index.search(c));
         }
         Set<UUID> online = presence.online(page.rows().stream().map(SearchIndexRepository.Row::masterId).toList());

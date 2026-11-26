@@ -13,7 +13,7 @@ docker compose up -d postgres redis minio   # lokal infratuzilma (host'da 5432 b
 ./gradlew build                             # testlar + bootJar (CI shuni ishlatadi)
 ./gradlew test --tests 'uz.usta.platform.order.OrderFlowIT'              # bitta test sinfi
 ./gradlew test --tests 'uz.usta.platform.order.OrderFlowIT.methodName'   # bitta metod
-docker compose up -d                        # to'liq stek (nginx TLS orqali https://localhost)
+docker compose up -d                        # to'liq stek (nginx TLS orqali https://localhost); .env da JWT_SECRET majburiy
 PROFILE=load ./loadtest/run.sh              # yuklama testi (faqat test muhitida), keyin ./loadtest/run.sh cleanup
 ```
 
@@ -30,17 +30,27 @@ Modullar `src/main/java/uz/usta/platform/<modul>/`: `identity, profile, catalog,
 - `internal/{domain,application,persistence,web}` — yopiq. `domain` — entity/status mashinasi, `application` — `@Transactional` servislar, `persistence` — Spring Data, `web` — controller + DTO + MapStruct mapper.
 - `ModularityTest` (Spring Modulith: internal'ga murojaat va sikl yo'q) va `ArchitectureRulesTest` (ArchUnit: field injection yo'q, `java.util.logging`/`System.out` yo'q, `@RestController` faqat `..internal.web..`/`..shared.web..`da, controller repository'ga to'g'ridan-to'g'ri murojaat qilmaydi, `@Entity` faqat `..internal.domain..`da va API'dan qaytmaydi). Yangi modul qo'shsangiz `package-info.java` da `@ApplicationModule` kerak.
 
-**Modullararo aloqa — Transactional Outbox.** Biznes o'zgarish va `outbox_events` qatori bitta tranzaksiyada yoziladi (`shared/outbox`: `OutboxPublisher` → `OutboxRelay` (ShedLock, `FOR UPDATE SKIP LOCKED`) → `OutboxDispatcher`, hozir in-process Spring event). Event iste'molchilari **idempotent** bo'lishi shart (event `id` bo'yicha). Tinglash usuli — `OutboxMessage` ustida `@EventListener(condition = "#m.eventType == '<ochiq-event-nomi>'")` (event nomlari modul ildizidagi `*Events` sinflarida, masalan `OrderEvents.STATUS_CHANGED`); namuna — `notification/.../DomainEventsListener`. Yangi event turi qo'shsangiz, nomini shu modulning `*Events` sinfiga qo'ying.
+**Modullararo aloqa — Transactional Outbox.** Biznes o'zgarish va `outbox_events` qatori bitta tranzaksiyada yoziladi (`shared/outbox`: `OutboxPublisher` → `OutboxRelay` (`FOR UPDATE SKIP LOCKED`) → `OutboxDispatcher`, hozir in-process Spring event; urinishi tugaganlar — `OutboxDeadLetters`). Event iste'molchilari **idempotent** bo'lishi shart (event `id` bo'yicha). Tinglash usuli — `OutboxMessage` ustida `@EventListener(condition = "#m.eventType == '<ochiq-event-nomi>'")` (event nomlari modul ildizidagi `*Events` sinflarida, masalan `OrderEvents.STATUS_CHANGED`); namuna — `notification/.../DomainEventsListener`. Yangi event turi qo'shsangiz, nomini shu modulning `*Events` sinfiga qo'ying.
 
-**Buyurtma** (`order`): status mashinasi `CREATED→SEARCHING→ACCEPTED→IN_PROGRESS→COMPLETED→COMMISSION→REVIEWED` (+ `CANCELLED/EXPIRED/DISPUTED`); har o'tishda ruxsat jadvali tekshiriladi, `order_status_history` yoziladi, outbox event ketadi. Bir vaqtda ikki usta qabul qilmasligi uchun `orders` qatori `SELECT … FOR UPDATE` + `@Version`. `REJECTED` — buyurtma emas, taklif (`order_master_offers`) holati.
+**Buyurtma** (`order`): status mashinasi `CREATED→SEARCHING→ACCEPTED→IN_PROGRESS→COMPLETED→COMMISSION→REVIEWED` (+ `CANCELLED/EXPIRED/DISPUTED`; usta voz kechsa `ACCEPTED→SEARCHING`, `OrderRequeue`); har o'tishda ruxsat jadvali tekshiriladi, `order_status_history` yoziladi, outbox event ketadi. Bir vaqtda ikki usta qabul qilmasligi uchun `orders` qatori `SELECT … FOR UPDATE` + `@Version`. `REJECTED` — buyurtma emas, taklif (`order_master_offers`) holati.
 
-**Provayderlar `@ConditionalOnProperty` bilan almashadi** (`app.sms.provider`: `log|eskiz`; `app.push.provider`: `log|fcm`). Lokal/test'da `log` stub. `OTP_FIXED_CODE` (doimiy OTP, lokal uchun) `SMS_PROVIDER=log` bo'lmasa `OtpService` konstruktorida `IllegalStateException` bilan ilovani ishga tushirmaydi. Prod profilida `shared/ops/ProductionReadinessCheck` xavfli sozlamalarni (placeholder JWT siri, stub SMS/push, ochiq Swagger…) ilovani to'xtatmasdan WARN log va `app.config.warnings` metrikasiga yozadi.
+**Komissiya** (`payment`): usta hisobini o'zgartiradigan har amal avval `MasterAccount.lock(masterId)` (advisory lock) oladi — hisobotlar o'qilishidan oldin. To'lanadigan summa = INVOICED − kredit (ledger balansi + ochiq komissiyalar); nizodagi qator `on_hold`. Muddati o'tgan qarzdor ustaga taklif bormaydi.
+
+**Fayl yuklash** tranzaksiyadan tashqarida: `FileStorage.storeAndSave` — uni chaqiradigan servis metodiga `@Transactional` qo'ymang, shartlarni `save` ichida qayta tekshiring.
+
+**WebSocket**: `StompAuthInterceptor` kadrlar oq ro'yxati (`SEND` faqat `/app/**`), `ChatDeliveryInterceptor` har yetkazishda ishtirokchilikni tekshiradi. Chat — (buyurtma, usta) juftligi bo'yicha.
+
+**Provayderlar `@ConditionalOnProperty` bilan almashadi** (`app.sms.provider`: `log|eskiz`; `app.push.provider`: `log|fcm`). Lokal/test'da `log` stub. `OTP_FIXED_CODE` (doimiy OTP, lokal uchun) `SMS_PROVIDER=log` bo'lmasa `OtpService` konstruktorida `IllegalStateException` bilan ilovani ishga tushirmaydi. Prod profilida `shared/ops/ProductionReadinessCheck` namunaviy JWT siri yoki `OTP_FIXED_CODE` bo'lsa ilovani ishga tushirmaydi; qolgan xavfli sozlamalarni (stub SMS/push, ochiq Swagger, standart parollar…) WARN log va `app.config.warnings` metrikasiga yozadi.
 
 **Boshqa kelishuvlar:**
 - Hamma ID — UUID v7 (`shared/util/Uuids`), pul — `NUMERIC(14,2)` UZS, vaqt UTC (komissiya haftasi — Asia/Tashkent, dushanba).
 - Sxema faqat Flyway orqali (`src/main/resources/db/migration/V<n>__*.sql`); `ddl-auto: validate`. Mavjud migratsiyani tahrirlamang — yangisini qo'shing.
-- Xatolar: `BusinessException` + `ErrorCode` → `GlobalExceptionHandler`; matnlar i18n (`src/main/resources/i18n/messages(_ru|_en).properties`, standart uz) — yangi xabar kaliti uch tilga ham qo'shiladi.
-- Auth: telefon+OTP (Redis'da HMAC hash), JWT access (15 daq) + aylanuvchi refresh; ADMIN roli `ADMIN_PHONES` raqamlariga beriladi. Rate limit — Redis Lua (`shared/ratelimit`).
+- Xatolar: `BusinessException` + `ErrorCode` → `GlobalExceptionHandler`; matnlar i18n (`src/main/resources/i18n/messages(_uz_Cyrl|_ru|_en).properties`, standart uz) — yangi xabar kaliti to'rtala faylga qo'shiladi (`MessageBundlesTest`). Matnlarda `'` o'rniga `ʻ`/`ʼ`. Xatoga argument bo'ladigan enum nomi uchun `status.*`, `notFound` resursi uchun `resource.*` kaliti qo'shing. Bazaga tizim yozadigan matn — kod bilan (`SystemReasons`), o'qishda tarjima.
+- Katalog nomlari uch tilda majburiy; `uzCyrl` bo'sh bo'lsa `UzbekCyrillic` o'giradi. Kategoriya/xizmat o'chirilmaydi, arxivlanadi (`deleted_at`) — admin so'rovlari uni chiqarib tashlashi shart.
+- Auth: telefon+OTP (Redis'da HMAC hash), JWT access (15 daq) + aylanuvchi refresh. `SUPER_ADMIN` faqat `SUPER_ADMIN_PHONES` dan; `ADMIN` ni super admin huquqlar (`AdminPermission`) bilan tayinlaydi. Yangi admin endpoint'i `shared/security/AdminRoutes` da huquqqa bog'lanadi (aks holda faqat super adminga ochiq) va `AdminAccessIT` da tasniflanadi; o'chirishga `@PreAuthorize("hasAuthority('PERM_DELETE')")`. Rate limit — Redis Lua (`shared/ratelimit`).
+- API hujjati (frontend uchun): `shared/openapi` — o'zgargan endpoint'lar `ApiChanges` ga, ilovaga ta'siri `resources/openapi/changelog.md` ga yoziladi; xato kodlari va admin huquqlari koddan avtomatik chiqadi (`OpenApiDocsIT`).
+- Foydalanuvchini o'chirish — anonimlashtirish: to'siq bo'lsa `identity.UserDeletionGuard`, ma'lumotni tozalash uchun `IdentityEvents.USER_DELETED` tinglovchisi. Shaxsiy ma'lumot saqlaydigan yangi modul ikkalasini ko'rib chiqishi shart.
+- Erkin matnli kirish maydonlariga `@PlainText` (+ `@Size`); STOMP kabi Bean Validation yo'q yo'llarda `PlainTextValidator.isPlain`. Yuklangan rasm `storage` da tozalanadi (`ImageSanitizer`); yangi fayl turi — `FilePurpose`, SVG qabul qilinmaydi.
 - MapStruct `unmappedTargetPolicy=ERROR` — mapper'da barcha maydonlar aniq xaritalanishi kerak.
 - Virtual thread yoqilgan; ShedLock bilan klasterda cron'lar bitta instansiyada ishlaydi.
 
@@ -52,4 +62,4 @@ Modullar `src/main/java/uz/usta/platform/<modul>/`: `identity, profile, catalog,
 
 ## Deploy / operatsiya
 
-`docker-compose.yml` (api, postgres, redis, minio, nginx, prometheus, grafana), `.env.example` → `.env` (`change-me-*` almashtiriladi). Maxfiy fayllar (masalan Firebase service account) `./secrets/` da, konteynerda `/run/secrets/` — git'ga tushmaydi. CI: `.github/workflows/ci.yml` (build+test, promtool, Trivy, image, `v*` tegda SSH deploy `scripts/deploy.sh`). Backup/restore — `scripts/backup.sh`, `scripts/restore.sh`; alertlarga javob — `docs/operations.md`.
+`docker-compose.yml` (api, postgres, redis, minio, nginx, prometheus, grafana), `.env.example` → `.env` (`JWT_SECRET` beriladi, `change-me-*` almashtiriladi). Maxfiy fayllar (masalan Firebase service account) `./secrets/` da, konteynerda `/run/secrets/` — git'ga tushmaydi. CI: `.github/workflows/ci.yml` (build+test, promtool, Trivy, image, `v*` tegda SSH deploy `scripts/deploy.sh`). Backup/restore — `scripts/backup.sh`, `scripts/restore.sh`; alertlarga javob — `docs/operations.md`.

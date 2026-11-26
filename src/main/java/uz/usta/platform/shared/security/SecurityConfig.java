@@ -20,6 +20,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.servlet.HandlerExceptionResolver;
+import uz.usta.platform.shared.ratelimit.RateLimiter;
 import uz.usta.platform.shared.web.ApiPaths;
 
 /**
@@ -27,8 +28,10 @@ import uz.usta.platform.shared.web.ApiPaths;
  * ro'yxati. 401/403 javoblari ham {@code GlobalExceptionHandler} orqali yagona formatda qaytadi.
  * Autentifikatsiya: {@code Authorization: Bearer <JWT>} (oauth2-resource-server, {@link JwtSecurityConfig}).
  *
- * <p>Yo'llar bo'yicha rollar: {@code /api/v1/admin/**} — ADMIN, {@code /api/v1/master/**} — MASTER,
- * {@code /api/v1/customer/**} — CUSTOMER, qolganlari — istalgan autentifikatsiyadan o'tgan foydalanuvchi.
+ * <p>Yo'llar bo'yicha: {@code /api/v1/admin/**} — bo'limga mos {@link AdminPermission} ({@code admins} va
+ * ro'yxatda yo'q yo'llar — faqat SUPER_ADMIN; o'chirish metodlarida qo'shimcha {@code DELETE} huquqi),
+ * {@code /api/v1/master/**} — MASTER, {@code /api/v1/customer/**} — CUSTOMER, qolganlari — istalgan
+ * autentifikatsiyadan o'tgan foydalanuvchi.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableMethodSecurity
@@ -49,7 +52,8 @@ class SecurityConfig {
     SecurityFilterChain apiSecurity(HttpSecurity http,
                                     @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver,
                                     Converter<Jwt, AbstractAuthenticationToken> jwtAuthenticationConverter,
-                                    UserRevocations revocations)
+                                    UserRevocations revocations, RateLimiter rateLimiter,
+                                    UploadProperties uploads)
             throws Exception {
         AuthenticationEntryPoint entryPoint = (req, res, ex) -> resolver.resolveException(req, res, null, ex);
         AccessDeniedHandler deniedHandler = (req, res, ex) -> resolver.resolveException(req, res, null, ex);
@@ -68,12 +72,25 @@ class SecurityConfig {
                         .accessDeniedHandler(deniedHandler)
                         .jwt(j -> j.jwtAuthenticationConverter(jwtAuthenticationConverter)))
                 .addFilterAfter(new RevokedUserFilter(revocations, resolver), BearerTokenAuthenticationFilter.class)
-                .authorizeHttpRequests(a -> a
-                        .requestMatchers(PUBLIC_PATHS).permitAll()
-                        .requestMatchers(ApiPaths.ADMIN + "/**").hasRole(Role.ADMIN.name())
-                        .requestMatchers(ApiPaths.MASTER + "/**").hasRole(Role.MASTER.name())
-                        .requestMatchers(ApiPaths.CUSTOMER + "/**").hasRole(Role.CUSTOMER.name())
-                        .anyRequest().authenticated())
+                .addFilterAfter(new UploadRateLimitFilter(rateLimiter, uploads, resolver), RevokedUserFilter.class)
+                .authorizeHttpRequests(a -> {
+                    a.requestMatchers(PUBLIC_PATHS).permitAll();
+                    // admin bo'limlari — huquq bo'yicha (tartib va ro'yxat: AdminRoutes)
+                    for (AdminRoutes.Rule rule : AdminRoutes.RULES) {
+                        String[] patterns = rule.patterns().toArray(String[]::new);
+                        var matched = rule.method() == null ? a.requestMatchers(patterns)
+                                : a.requestMatchers(rule.method(), patterns);
+                        if (rule.anyOf().isEmpty()) {
+                            matched.hasRole(Role.SUPER_ADMIN.name());
+                        } else {
+                            matched.hasAnyAuthority(rule.anyOf().stream().map(AdminPermission::authority)
+                                    .toArray(String[]::new));
+                        }
+                    }
+                    a.requestMatchers(ApiPaths.MASTER + "/**").hasRole(Role.MASTER.name())
+                            .requestMatchers(ApiPaths.CUSTOMER + "/**").hasRole(Role.CUSTOMER.name())
+                            .anyRequest().authenticated();
+                })
                 .build();
     }
 

@@ -12,7 +12,10 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 import uz.usta.platform.shared.error.BusinessException;
 import uz.usta.platform.shared.error.CommonErrorCode;
 
-/** Bearer token tekshirilgandan keyin: foydalanuvchi bloklangan bo'lsa — 403 USER_BLOCKED (yagona formatda). */
+/**
+ * Bearer token tekshirilgandan keyin (yagona formatda): foydalanuvchi bloklangan/o'chirilgan bo'lsa — 403
+ * USER_BLOCKED; rol yoki huquqlari token chiqarilgandan keyin o'zgargan bo'lsa — 401 TOKEN_OUTDATED.
+ */
 class RevokedUserFilter extends OncePerRequestFilter {
 
     private final UserRevocations revocations;
@@ -27,10 +30,14 @@ class RevokedUserFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof AuthenticatedUser user && revocations.isRevoked(user.id())) {
-            SecurityContextHolder.clearContext();
-            resolver.resolveException(request, response, null, new BusinessException(CommonErrorCode.USER_BLOCKED));
-            return;
+        if (auth != null && auth.getPrincipal() instanceof AuthenticatedUser user) {
+            CommonErrorCode rejection = revocations.isRevoked(user.id()) ? CommonErrorCode.USER_BLOCKED
+                    : revocations.isOutdated(user.id(), user.authzVersion()) ? CommonErrorCode.TOKEN_OUTDATED : null;
+            if (rejection != null) {
+                SecurityContextHolder.clearContext();
+                resolver.resolveException(request, response, null, new BusinessException(rejection));
+                return;
+            }
         }
         chain.doFilter(request, response);
     }

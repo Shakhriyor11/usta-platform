@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import uz.usta.platform.identity.UserDirectory;
 import uz.usta.platform.notification.internal.persistence.NotificationStore;
 import uz.usta.platform.notification.internal.persistence.NotificationStore.PushToken;
 import uz.usta.platform.notification.internal.persistence.NotificationStore.Row;
@@ -33,12 +34,15 @@ public class NotificationService {
     private static final Duration PUSH_SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
 
     private final NotificationStore store;
+    private final UserDirectory users;
     private final NotificationRenderer renderer;
     private final PushSender push;
     private final Clock clock;
     private final SimpleAsyncTaskExecutor pushExecutor = createPushExecutor();
 
-    NotificationService(NotificationStore store, NotificationRenderer renderer, PushSender push, Clock clock) {
+    NotificationService(NotificationStore store, NotificationRenderer renderer, PushSender push, UserDirectory users,
+                        Clock clock) {
+        this.users = users;
         this.store = store;
         this.renderer = renderer;
         this.push = push;
@@ -56,6 +60,9 @@ public class NotificationService {
     @Transactional
     public void notify(UUID sourceEventId, UUID userId, NotificationType type, List<String> args,
                        Map<String, String> data) {
+        if (users.isDeleted(userId)) { // masalan hisob o'chirilganda bekor qilingan buyurtma eventi
+            return;
+        }
         NotificationRenderer.Text text = renderer.render(type, args, NotificationRenderer.DEFAULT);
         store.insert(sourceEventId, userId, type.name(), text.title(), text.body(), args, data)
                 .ifPresent(id -> afterCommit(() -> sendPush(userId, type, args, data)));
@@ -146,7 +153,7 @@ public class NotificationService {
     public void registerToken(UUID userId, String token, String platform, Locale locale) {
         String lang = switch (locale.getLanguage()) {
             case "ru", "en" -> locale.getLanguage();
-            default -> "uz";
+            default -> "Cyrl".equals(locale.getScript()) ? "uz-Cyrl" : "uz";
         };
         store.upsertToken(userId, token, platform, lang);
     }

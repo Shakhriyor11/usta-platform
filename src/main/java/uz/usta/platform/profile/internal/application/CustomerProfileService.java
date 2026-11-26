@@ -38,11 +38,13 @@ public class CustomerProfileService {
         return profiles.saveAndFlush(profile);
     }
 
-    @Transactional
+    /** Fayl DB tranzaksiyasi tashqarisida yuklanadi. */
     public CustomerProfile changeAvatar(UUID userId, MultipartFile file) {
-        CustomerProfile profile = get(userId);
-        String key = storage.store(FilePurpose.AVATAR, userId, file).key();
-        storage.deleteAfterCommit(profile.replaceAvatar(key));
-        return profiles.saveAndFlush(profile);
+        get(userId); // profil bo'lmasa — yuklamasdan rad etamiz
+        return storage.storeAndSave(FilePurpose.AVATAR, userId, file, stored -> {
+            CustomerProfile profile = get(userId);
+            storage.deleteAfterCommit(profile.replaceAvatar(stored.key()));
+            return profiles.saveAndFlush(profile);
+        });
     }
 }

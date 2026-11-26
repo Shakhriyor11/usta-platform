@@ -9,4 +9,7 @@ public interface UserDirectory {
 
     /** @return userId -> telefon raqam (topilmaganlar natijada bo'lmaydi) */
     Map<UUID, String> phones(Collection<UUID> userIds);
+
+    /** Hisob o'chirilgan (anonimlashtirilgan) — unga yangi ma'lumot yozilmaydi. */
+    boolean isDeleted(UUID userId);
 }

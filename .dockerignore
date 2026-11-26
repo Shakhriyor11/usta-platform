@@ -7,3 +7,8 @@ docs
 *.md
 .env
 .env.*
+# maxfiy va lokal fayllar build kontekstiga tushmasin
+secrets
+backups
+config
+loadtest

@@ -1,0 +1,434 @@
+[
+  {
+    "key": "plumbing",
+    "name": {
+      "uz": "Santexnika",
+      "ru": "Сантехника",
+      "en": "Plumbing"
+    }
+  },
+  {
+    "key": "pipe",
+    "name": {
+      "uz": "Quvur va oqish",
+      "ru": "Трубы и протечки",
+      "en": "Pipes and leaks"
+    }
+  },
+  {
+    "key": "water",
+    "name": {
+      "uz": "Suv",
+      "ru": "Вода",
+      "en": "Water"
+    }
+  },
+  {
+    "key": "toilet",
+    "name": {
+      "uz": "Unitaz",
+      "ru": "Унитаз",
+      "en": "Toilet"
+    }
+  },
+  {
+    "key": "shower",
+    "name": {
+      "uz": "Dush",
+      "ru": "Душ",
+      "en": "Shower"
+    }
+  },
+  {
+    "key": "bath",
+    "name": {
+      "uz": "Vanna",
+      "ru": "Ванна",
+      "en": "Bath"
+    }
+  },
+  {
+    "key": "electrical",
+    "name": {
+      "uz": "Elektrika",
+      "ru": "Электрика",
+      "en": "Electrical"
+    }
+  },
+  {
+    "key": "socket",
+    "name": {
+      "uz": "Rozetka",
+      "ru": "Розетка",
+      "en": "Socket"
+    }
+  },
+  {
+    "key": "chandelier",
+    "name": {
+      "uz": "Qandil",
+      "ru": "Люстра",
+      "en": "Chandelier"
+    }
+  },
+  {
+    "key": "lamp",
+    "name": {
+      "uz": "Chiroq",
+      "ru": "Светильник",
+      "en": "Lamp"
+    }
+  },
+  {
+    "key": "lightbulb",
+    "name": {
+      "uz": "Lampochka",
+      "ru": "Лампочка",
+      "en": "Light bulb"
+    }
+  },
+  {
+    "key": "wiring",
+    "name": {
+      "uz": "Elektr simlari",
+      "ru": "Электропроводка",
+      "en": "Wiring"
+    }
+  },
+  {
+    "key": "repair",
+    "name": {
+      "uz": "Taʼmirlash",
+      "ru": "Ремонт",
+      "en": "Repair"
+    }
+  },
+  {
+    "key": "drill",
+    "name": {
+      "uz": "Parmalash",
+      "ru": "Сверление",
+      "en": "Drilling"
+    }
+  },
+  {
+    "key": "painting",
+    "name": {
+      "uz": "Boʻyoq ishlari",
+      "ru": "Малярные работы",
+      "en": "Painting"
+    }
+  },
+  {
+    "key": "brush",
+    "name": {
+      "uz": "Choʻtka",
+      "ru": "Кисть",
+      "en": "Brush"
+    }
+  },
+  {
+    "key": "wall",
+    "name": {
+      "uz": "Devor ishlari",
+      "ru": "Кладка и стены",
+      "en": "Masonry"
+    }
+  },
+  {
+    "key": "tiling",
+    "name": {
+      "uz": "Kafel",
+      "ru": "Плитка",
+      "en": "Tiling"
+    }
+  },
+  {
+    "key": "measuring",
+    "name": {
+      "uz": "Oʻlchash",
+      "ru": "Замеры",
+      "en": "Measuring"
+    }
+  },
+  {
+    "key": "appliances",
+    "name": {
+      "uz": "Maishiy texnika",
+      "ru": "Бытовая техника",
+      "en": "Home appliances"
+    }
+  },
+  {
+    "key": "fridge",
+    "name": {
+      "uz": "Muzlatgich",
+      "ru": "Холодильник",
+      "en": "Refrigerator"
+    }
+  },
+  {
+    "key": "tv",
+    "name": {
+      "uz": "Televizor",
+      "ru": "Телевизор",
+      "en": "TV"
+    }
+  },
+  {
+    "key": "microwave",
+    "name": {
+      "uz": "Mikrotoʻlqinli pech",
+      "ru": "Микроволновая печь",
+      "en": "Microwave"
+    }
+  },
+  {
+    "key": "cooking",
+    "name": {
+      "uz": "Oshxona jihozlari",
+      "ru": "Кухонная техника",
+      "en": "Kitchen equipment"
+    }
+  },
+  {
+    "key": "climate",
+    "name": {
+      "uz": "Konditsioner",
+      "ru": "Кондиционер",
+      "en": "Air conditioning"
+    }
+  },
+  {
+    "key": "fan",
+    "name": {
+      "uz": "Ventilyatsiya",
+      "ru": "Вентиляция",
+      "en": "Ventilation"
+    }
+  },
+  {
+    "key": "heating",
+    "name": {
+      "uz": "Isitish",
+      "ru": "Отопление",
+      "en": "Heating"
+    }
+  },
+  {
+    "key": "cooling",
+    "name": {
+      "uz": "Sovitish",
+      "ru": "Охлаждение",
+      "en": "Cooling"
+    }
+  },
+  {
+    "key": "gas",
+    "name": {
+      "uz": "Gaz jihozlari",
+      "ru": "Газовое оборудование",
+      "en": "Gas equipment"
+    }
+  },
+  {
+    "key": "furniture",
+    "name": {
+      "uz": "Mebel",
+      "ru": "Мебель",
+      "en": "Furniture"
+    }
+  },
+  {
+    "key": "bed",
+    "name": {
+      "uz": "Karavot",
+      "ru": "Кровать",
+      "en": "Bed"
+    }
+  },
+  {
+    "key": "door",
+    "name": {
+      "uz": "Eshik",
+      "ru": "Двери",
+      "en": "Doors"
+    }
+  },
+  {
+    "key": "window",
+    "name": {
+      "uz": "Deraza va jalyuzi",
+      "ru": "Окна и жалюзи",
+      "en": "Windows and blinds"
+    }
+  },
+  {
+    "key": "lock",
+    "name": {
+      "uz": "Qulf",
+      "ru": "Замки",
+      "en": "Locks"
+    }
+  },
+  {
+    "key": "key",
+    "name": {
+      "uz": "Kalit",
+      "ru": "Ключи",
+      "en": "Keys"
+    }
+  },
+  {
+    "key": "cleaning",
+    "name": {
+      "uz": "Tozalash",
+      "ru": "Уборка",
+      "en": "Cleaning"
+    }
+  },
+  {
+    "key": "shine",
+    "name": {
+      "uz": "Bosh tozalash",
+      "ru": "Генеральная уборка",
+      "en": "Deep cleaning"
+    }
+  },
+  {
+    "key": "waste",
+    "name": {
+      "uz": "Chiqindi olib ketish",
+      "ru": "Вывоз мусора",
+      "en": "Waste removal"
+    }
+  },
+  {
+    "key": "garden",
+    "name": {
+      "uz": "Bogʻ ishlari",
+      "ru": "Садовые работы",
+      "en": "Gardening"
+    }
+  },
+  {
+    "key": "flowers",
+    "name": {
+      "uz": "Gullar",
+      "ru": "Цветы",
+      "en": "Flowers"
+    }
+  },
+  {
+    "key": "moving",
+    "name": {
+      "uz": "Koʻchirish",
+      "ru": "Переезд",
+      "en": "Moving"
+    }
+  },
+  {
+    "key": "delivery",
+    "name": {
+      "uz": "Yetkazib berish",
+      "ru": "Доставка",
+      "en": "Delivery"
+    }
+  },
+  {
+    "key": "computer",
+    "name": {
+      "uz": "Kompyuter",
+      "ru": "Компьютер",
+      "en": "Computer"
+    }
+  },
+  {
+    "key": "phone",
+    "name": {
+      "uz": "Telefon",
+      "ru": "Телефон",
+      "en": "Phone"
+    }
+  },
+  {
+    "key": "internet",
+    "name": {
+      "uz": "Internet",
+      "ru": "Интернет",
+      "en": "Internet"
+    }
+  },
+  {
+    "key": "security-camera",
+    "name": {
+      "uz": "Videokuzatuv",
+      "ru": "Видеонаблюдение",
+      "en": "CCTV"
+    }
+  },
+  {
+    "key": "car",
+    "name": {
+      "uz": "Avtomobil",
+      "ru": "Автомобиль",
+      "en": "Car"
+    }
+  },
+  {
+    "key": "house",
+    "name": {
+      "uz": "Uy ishlari",
+      "ru": "Работы по дому",
+      "en": "Home works"
+    }
+  },
+  {
+    "key": "solar",
+    "name": {
+      "uz": "Quyosh panellari",
+      "ru": "Солнечные панели",
+      "en": "Solar panels"
+    }
+  },
+  {
+    "key": "pest-control",
+    "name": {
+      "uz": "Zararkunandalarga qarshi",
+      "ru": "Дезинсекция",
+      "en": "Pest control"
+    }
+  },
+  {
+    "key": "sewing",
+    "name": {
+      "uz": "Tikuvchilik",
+      "ru": "Шитьё",
+      "en": "Sewing"
+    }
+  },
+  {
+    "key": "laundry",
+    "name": {
+      "uz": "Kir yuvish",
+      "ru": "Стирка",
+      "en": "Laundry"
+    }
+  },
+  {
+    "key": "construction",
+    "name": {
+      "uz": "Qurilish",
+      "ru": "Строительство",
+      "en": "Construction"
+    }
+  },
+  {
+    "key": "other",
+    "name": {
+      "uz": "Boshqa",
+      "ru": "Другое",
+      "en": "Other"
+    }
+  }
+]

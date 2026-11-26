@@ -1,5 +1,6 @@
 package uz.usta.platform.catalog.internal.persistence;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,6 +19,13 @@ public interface MasterServicePriceRepository extends JpaRepository<MasterServic
 
     long countByMasterId(UUID masterId);
 
+    List<MasterServicePrice> findByServiceIdIn(Collection<UUID> serviceIds);
+
     @Query("select p.masterId from MasterServicePrice p where p.serviceId = :serviceId")
     List<UUID> findMasterIdsByServiceId(@Param("serviceId") UUID serviceId);
+
+    @Query("""
+            select distinct p.masterId from MasterServicePrice p
+            where p.serviceId in (select s.id from ServiceDefinition s where s.categoryId in :categoryIds)""")
+    List<UUID> findMasterIdsByCategoryIds(@Param("categoryIds") Collection<UUID> categoryIds);
 }

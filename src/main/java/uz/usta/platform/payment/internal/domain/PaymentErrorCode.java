@@ -6,7 +6,8 @@ import uz.usta.platform.shared.error.ErrorCode;
 public enum PaymentErrorCode implements ErrorCode {
     NOTHING_TO_SETTLE(HttpStatus.CONFLICT, "error.payment.nothing-to-settle"),
     AMOUNT_MISMATCH(HttpStatus.CONFLICT, "error.payment.amount-mismatch"),
-    INVALID_PERIOD(HttpStatus.BAD_REQUEST, "error.payment.invalid-period");
+    INVALID_PERIOD(HttpStatus.BAD_REQUEST, "error.payment.invalid-period"),
+    USER_HAS_DEBT(HttpStatus.CONFLICT, "error.payment.user-has-debt");
 
     private final HttpStatus status;
     private final String messageKey;

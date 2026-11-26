@@ -4,16 +4,23 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.usta.platform.catalog.internal.application.CatalogQueryService;
+import uz.usta.platform.catalog.internal.application.IconLibrary;
 import uz.usta.platform.catalog.internal.web.CatalogDtos.CategoryTreeResponse;
+import uz.usta.platform.catalog.internal.web.CatalogDtos.IconResponse;
 import uz.usta.platform.catalog.internal.web.CatalogDtos.ServiceResponse;
+import uz.usta.platform.shared.error.BusinessException;
 import uz.usta.platform.shared.web.ApiPaths;
 
 @Tag(name = "Catalog", description = "Kategoriyalar va xizmatlar (autentifikatsiyasiz, Accept-Language bo'yicha)")
@@ -23,10 +30,29 @@ class PublicCatalogController {
 
     private final CatalogQueryService catalog;
     private final CatalogWebMapper mapper;
+    private final IconLibrary icons;
 
-    PublicCatalogController(CatalogQueryService catalog, CatalogWebMapper mapper) {
+    PublicCatalogController(CatalogQueryService catalog, CatalogWebMapper mapper, IconLibrary icons) {
         this.catalog = catalog;
         this.mapper = mapper;
+        this.icons = icons;
+    }
+
+    @Operation(summary = "Tayyor ikonkalar to'plami (admin kategoriya/xizmatga tanlaydi)")
+    @GetMapping("/icons")
+    List<IconResponse> icons() {
+        return icons.all().stream().map(mapper::toResponse).toList();
+    }
+
+    @Operation(summary = "To'plam ikonkasi (SVG)")
+    @GetMapping(path = "/icons/{key}.svg", produces = "image/svg+xml")
+    ResponseEntity<byte[]> icon(@PathVariable String key) {
+        byte[] svg = icons.svg(key).orElseThrow(() -> BusinessException.notFound("Icon", key));
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(Duration.ofDays(1)).cachePublic())
+                .header("Content-Security-Policy", "default-src 'none'; sandbox")
+                .contentType(MediaType.parseMediaType("image/svg+xml"))
+                .body(svg);
     }
 
     @Operation(summary = "Faol kategoriyalar daraxti")
@@ -41,7 +67,7 @@ class PublicCatalogController {
         return catalog.activeServices(id).stream().map(mapper::toResponse).toList();
     }
 
-    @Operation(summary = "Xizmatlarni nomi bo'yicha qidirish (uz/ru/en)")
+    @Operation(summary = "Xizmatlarni nomi bo'yicha qidirish (uz lotin/kirill, ru, en)")
     @GetMapping("/services")
     List<ServiceResponse> search(@RequestParam("q") @NotBlank @Size(min = 2, max = 100) String query) {
         return catalog.search(query).stream().map(mapper::toResponse).toList();

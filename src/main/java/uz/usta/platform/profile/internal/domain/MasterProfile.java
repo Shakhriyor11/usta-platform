@@ -134,6 +134,24 @@ public class MasterProfile extends AuditableEntity {
         rejectionReason = reason;
     }
 
+    /**
+     * Hisob o'chirildi: shaxsiy ma'lumotlar o'chadi, yozuvning o'zi (buyurtma, sharh va komissiya tarixi uchun)
+     * qoladi. Bo'sh ism o'qish paytida "O'chirilgan foydalanuvchi" deb ko'rsatiladi.
+     */
+    public void anonymize() {
+        this.fullName = "";
+        this.bio = null;
+        this.avatarKey = null;
+        this.workLatitude = null;
+        this.workLongitude = null;
+        this.verificationStatus = VerificationStatus.NOT_SUBMITTED;
+        this.rejectionReason = null;
+        this.submittedAt = null;
+        this.verifiedAt = null;
+        this.verifiedBy = null;
+        this.active = false;
+    }
+
     public void setActive(boolean active) {
         this.active = active;
     }

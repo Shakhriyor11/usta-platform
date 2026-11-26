@@ -7,6 +7,9 @@ public enum StorageErrorCode implements ErrorCode {
     FILE_EMPTY(HttpStatus.BAD_REQUEST, "error.storage.file-empty"),
     FILE_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "error.storage.file-too-large"),
     FILE_TYPE_NOT_ALLOWED(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "error.storage.file-type-not-allowed"),
+    IMAGE_INVALID(HttpStatus.BAD_REQUEST, "error.storage.image-invalid"),
+    IMAGE_DIMENSIONS(HttpStatus.BAD_REQUEST, "error.storage.image-dimensions"),
+    IMAGE_NOT_SQUARE(HttpStatus.BAD_REQUEST, "error.storage.image-not-square"),
     STORAGE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "error.storage.unavailable");
 
     private final HttpStatus status;

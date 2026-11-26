@@ -18,12 +18,13 @@ import uz.usta.platform.order.internal.domain.OrderStatus;
 import uz.usta.platform.order.internal.persistence.OrderAttachmentRepository;
 import uz.usta.platform.order.internal.persistence.OrderOfferRepository;
 import uz.usta.platform.order.internal.persistence.OrderRepository;
+import uz.usta.platform.payment.Commissions;
 import uz.usta.platform.profile.CustomerDirectory;
 import uz.usta.platform.search.MasterMatcher;
 import uz.usta.platform.shared.error.BusinessException;
+import uz.usta.platform.shared.ratelimit.RateLimiter;
 import uz.usta.platform.storage.FilePurpose;
 import uz.usta.platform.storage.FileStorage;
-import uz.usta.platform.storage.StoredFile;
 
 /** Mijoz amallari: buyurtma yaratish, kuzatish, bekor qilish, biriktirmalar, nizo. */
 @Service
@@ -38,14 +39,17 @@ public class CustomerOrderService {
     private final CatalogApi catalog;
     private final CustomerDirectory customers;
     private final MasterMatcher matcher;
+    private final Commissions commissions;
     private final FileStorage storage;
+    private final RateLimiter rateLimiter;
     private final OrderProperties props;
     private final Clock clock;
 
     CustomerOrderService(OrderRepository orders, OrderOfferRepository offers, OrderAttachmentRepository attachments,
                          OrderTransitions transitions, OfferDispatcher dispatcher, OrderAccess access,
-                         CatalogApi catalog, CustomerDirectory customers, MasterMatcher matcher, FileStorage storage,
-                         OrderProperties props, Clock clock) {
+                         CatalogApi catalog, CustomerDirectory customers, MasterMatcher matcher,
+                         Commissions commissions, FileStorage storage, RateLimiter rateLimiter, OrderProperties props,
+                         Clock clock) {
         this.orders = orders;
         this.offers = offers;
         this.attachments = attachments;
@@ -55,7 +59,9 @@ public class CustomerOrderService {
         this.catalog = catalog;
         this.customers = customers;
         this.matcher = matcher;
+        this.commissions = commissions;
         this.storage = storage;
+        this.rateLimiter = rateLimiter;
         this.props = props;
         this.clock = clock;
     }
@@ -105,13 +111,16 @@ public class CustomerOrderService {
             if (cmd.preferredMasterId().equals(customerId)) {
                 throw new BusinessException(OrderErrorCode.CANNOT_ORDER_FROM_SELF);
             }
-            if (matcher.match(cmd.preferredMasterId(), cmd.serviceId(), lat, lng).isEmpty()) {
+            if (matcher.match(cmd.preferredMasterId(), cmd.serviceId(), lat, lng).isEmpty()
+                    || commissions.hasOverdueDebt(cmd.preferredMasterId())) {
                 throw new BusinessException(OrderErrorCode.MASTER_NOT_AVAILABLE);
             }
         }
+        // faqat haqiqatan yaratiladigan buyurtmalar hisoblanadi (validatsiya xatolari limitni yemaydi)
+        rateLimiter.consume("order-create", customerId.toString(), props.createLimit(), props.createWindow());
         Order order = transitions.created(new Order(customerId, cmd.serviceId(), cmd.preferredMasterId(),
                 cmd.description().strip(), title, text, details, lat, lng, cmd.scheduledAt(),
-                now.plus(props.searchTimeout())), customerId);
+                props.searchDeadline(now, cmd.scheduledAt())), customerId);
         transitions.change(order, OrderStatus.SEARCHING, customerId, null);
         dispatcher.dispatch(order);
         return order;
@@ -150,18 +159,20 @@ public class CustomerOrderService {
     @Transactional
     public Order openDispute(UUID customerId, UUID orderId, String reason) {
         Order order = access.lockForCustomer(orderId, customerId);
-        return Disputes.open(order, customerId, reason, transitions);
+        return Disputes.open(order, customerId, reason, transitions, commissions);
     }
 
-    @Transactional
+    /**
+     * Fayl DB tranzaksiyasi va buyurtma qulfi tashqarisida yuklanadi (sekin yuklash ulanish va qulfni band
+     * qilmaydi); yozuv esa qulf ostida, shartlar qayta tekshirilib saqlanadi.
+     */
     public OrderAttachment addAttachment(UUID customerId, UUID orderId, MultipartFile file) {
-        Order order = access.lockForCustomer(orderId, customerId);
-        requireEditable(order);
-        if (attachments.countByOrderId(orderId) >= props.maxAttachments()) {
-            throw new BusinessException(OrderErrorCode.ATTACHMENT_LIMIT_EXCEEDED, props.maxAttachments());
-        }
-        StoredFile stored = storage.store(FilePurpose.ORDER_ATTACHMENT, orderId, file);
-        return attachments.save(new OrderAttachment(orderId, stored.key(), stored.contentType(), stored.sizeBytes()));
+        requireAttachable(get(customerId, orderId)); // yuklashdan oldin tez rad etish
+        return storage.storeAndSave(FilePurpose.ORDER_ATTACHMENT, orderId, file, stored -> {
+            requireAttachable(access.lockForCustomer(orderId, customerId));
+            return attachments.save(new OrderAttachment(orderId, stored.key(), stored.contentType(),
+                    stored.sizeBytes()));
+        });
     }
 
     @Transactional
@@ -172,6 +183,13 @@ public class CustomerOrderService {
                 .orElseThrow(() -> BusinessException.notFound("Attachment", attachmentId));
         attachments.delete(a);
         storage.deleteAfterCommit(a.getFileKey());
+    }
+
+    private void requireAttachable(Order order) {
+        requireEditable(order);
+        if (attachments.countByOrderId(order.getId()) >= props.maxAttachments()) {
+            throw new BusinessException(OrderErrorCode.ATTACHMENT_LIMIT_EXCEEDED, props.maxAttachments());
+        }
     }
 
     private static void requireEditable(Order order) {

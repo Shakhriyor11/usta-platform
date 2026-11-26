@@ -7,6 +7,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
+import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 import uz.usta.platform.shared.security.CorsProperties;
 
 /**
@@ -23,11 +24,26 @@ import uz.usta.platform.shared.security.CorsProperties;
 class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final StompAuthInterceptor auth;
+    private final ChatSessions sessions;
+    private final ChatDeliveryInterceptor delivery;
     private final CorsProperties cors;
 
-    WebSocketConfig(StompAuthInterceptor auth, CorsProperties cors) {
+    WebSocketConfig(StompAuthInterceptor auth, ChatSessions sessions, ChatDeliveryInterceptor delivery,
+                    CorsProperties cors) {
         this.auth = auth;
+        this.sessions = sessions;
+        this.delivery = delivery;
         this.cors = cors;
+    }
+
+    @Override
+    public void configureWebSocketTransport(WebSocketTransportRegistration registration) {
+        registration.addDecoratorFactory(sessions);
+    }
+
+    @Override
+    public void configureClientOutboundChannel(ChannelRegistration registration) {
+        registration.interceptors(delivery);
     }
 
     @Override

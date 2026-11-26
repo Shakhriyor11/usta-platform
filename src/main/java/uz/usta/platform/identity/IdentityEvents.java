@@ -9,6 +9,8 @@ public final class IdentityEvents {
     public static final String USER_BLOCKED = "identity.user-blocked";
     public static final String USER_UNBLOCKED = "identity.user-unblocked";
     public static final String ROLE_GRANTED = "identity.role-granted";
+    /** Hisob anonimlashtirildi — har modul o'zidagi shaxsiy ma'lumot va fayllarni o'chiradi. */
+    public static final String USER_DELETED = "identity.user-deleted";
 
     private IdentityEvents() {
     }
@@ -20,5 +22,8 @@ public final class IdentityEvents {
     }
 
     public record RoleGranted(UUID userId, String role) {
+    }
+
+    public record UserDeleted(UUID userId) {
     }
 }

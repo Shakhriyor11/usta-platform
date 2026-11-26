@@ -16,9 +16,11 @@ import uz.usta.platform.identity.UserDirectory;
 import uz.usta.platform.order.internal.application.MasterOrderService.MasterView;
 import uz.usta.platform.order.internal.application.MasterOrderService.OpenOffer;
 import uz.usta.platform.order.internal.application.OrderQueryService;
+import uz.usta.platform.order.internal.domain.OfferStatus;
 import uz.usta.platform.order.internal.domain.Order;
 import uz.usta.platform.order.internal.domain.OrderAttachment;
 import uz.usta.platform.order.internal.domain.OrderOffer;
+import uz.usta.platform.order.internal.domain.OrderStatus;
 import uz.usta.platform.order.internal.web.OrderDtos.AddressResponse;
 import uz.usta.platform.order.internal.web.OrderDtos.AdminOrderResponse;
 import uz.usta.platform.order.internal.web.OrderDtos.AttachmentResponse;
@@ -50,9 +52,11 @@ class OrderWebMapper {
     private final UserDirectory users;
     private final FileStorage storage;
     private final OrderQueryService query;
+    private final ReasonLocalizer reasons;
 
     OrderWebMapper(CatalogApi catalog, MasterProfiles masters, CustomerDirectory customers, UserDirectory users,
-                   FileStorage storage, OrderQueryService query) {
+                   FileStorage storage, OrderQueryService query, ReasonLocalizer reasons) {
+        this.reasons = reasons;
         this.catalog = catalog;
         this.masters = masters;
         this.customers = customers;
@@ -82,12 +86,17 @@ class OrderWebMapper {
                         phone);
             }
         }
+        List<BigDecimal> estimates = o.getStatus() == OrderStatus.SEARCHING ? query.offers(o.getId()).stream()
+                .filter(f -> f.getStatus() != OfferStatus.REJECTED)
+                .map(OrderOffer::getPriceFrom).filter(Objects::nonNull).sorted().toList() : List.of();
         return new OrderResponse(o.getId(), o.getStatus(), o.getServiceId(), serviceName(o), o.getDescription(),
-                fullAddress(o), o.getScheduledAt(), o.getSearchDeadline(), o.getPriceFrom(), o.getPrice(), master,
+                fullAddress(o), o.getScheduledAt(), o.getSearchDeadline(),
+                estimates.isEmpty() ? null : estimates.getFirst(), estimates.isEmpty() ? null : estimates.getLast(),
+                o.getPriceFrom(), o.getPrice(), master,
                 attachments(o.getId()),
                 query.history(o.getId()).stream().map(h -> new HistoryResponse(h.getOldStatus(), h.getNewStatus(),
-                        h.getChangedBy(), h.getReason(), h.getChangedAt())).toList(),
-                o.getCancelReason(), o.getCreatedAt(), o.getAcceptedAt(), o.getStartedAt(), o.getCompletedAt(),
+                        h.getChangedBy(), reasons.localize(h.getReason(), h.getChangedBy()), h.getChangedAt())).toList(),
+                cancelReason(o), o.getCreatedAt(), o.getAcceptedAt(), o.getStartedAt(), o.getCompletedAt(),
                 o.getClosedAt());
     }
 
@@ -123,7 +132,7 @@ class OrderWebMapper {
                 address, offer == null ? null : km(offer.getDistanceMeters()), o.getScheduledAt(), o.getPriceFrom(),
                 o.getPrice(), assigned ? o.getCommissionAmount() : null, customer, attachments(o.getId()),
                 offer == null ? null : offer.getStatus(), offer == null ? null : offer.getExpiresAt(),
-                o.getCancelReason(), o.getCreatedAt(), o.getAcceptedAt(), o.getStartedAt(), o.getCompletedAt());
+                cancelReason(o), o.getCreatedAt(), o.getAcceptedAt(), o.getStartedAt(), o.getCompletedAt());
     }
 
     // ---------------------------------------------------------------- admin
@@ -153,6 +162,10 @@ class OrderWebMapper {
     private static AddressResponse fullAddress(Order o) {
         return new AddressResponse(o.getAddressTitle(), o.getAddressText(), o.getAddressDetails(),
                 new GeoPoint(o.getLatitude(), o.getLongitude()));
+    }
+
+    private String cancelReason(Order o) {
+        return reasons.localize(o.getCancelReason(), o.getCancelledBy());
     }
 
     private String url(String key) {

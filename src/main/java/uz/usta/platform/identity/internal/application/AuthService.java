@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.usta.platform.identity.IdentityEvents;
+import uz.usta.platform.identity.PushTokenRevoker;
 import uz.usta.platform.identity.internal.domain.IdentityErrorCode;
 import uz.usta.platform.identity.internal.domain.PhoneNumber;
 import uz.usta.platform.identity.internal.domain.RefreshToken;
@@ -20,6 +21,7 @@ import uz.usta.platform.shared.error.BusinessException;
 import uz.usta.platform.shared.outbox.OutboxPublisher;
 import uz.usta.platform.shared.security.AccessToken;
 import uz.usta.platform.shared.security.Role;
+import uz.usta.platform.shared.security.UserRevocations;
 import uz.usta.platform.shared.util.Uuids;
 import uz.usta.platform.shared.web.ClientInfo;
 
@@ -35,10 +37,15 @@ public class AuthService {
     private final OutboxPublisher outbox;
     private final AuditLog audit;
     private final IdentityProperties props;
+    private final PushTokenRevoker pushTokens;
+    private final UserRevocations revocations;
     private final Clock clock;
 
     AuthService(OtpService otp, TokenService tokens, UserRepository users, RefreshTokenRepository refreshTokens,
-                OutboxPublisher outbox, AuditLog audit, IdentityProperties props, Clock clock) {
+                OutboxPublisher outbox, AuditLog audit, IdentityProperties props, PushTokenRevoker pushTokens,
+                UserRevocations revocations, Clock clock) {
+        this.revocations = revocations;
+        this.pushTokens = pushTokens;
         this.otp = otp;
         this.tokens = tokens;
         this.users = users;
@@ -65,10 +72,7 @@ public class AuthService {
         if (user.isBlocked()) {
             throw new BusinessException(IdentityErrorCode.USER_BLOCKED);
         }
-        if (props.adminPhones().contains(phone) && user.grant(Role.ADMIN)) {
-            audit.record(user.getId(), "user.admin-bootstrap", "user", user.getId(), Map.of());
-            log.warn("ADMIN role granted to {} via app.identity.admin-phones", PhoneNumber.mask(phone));
-        }
+        syncSuperAdmin(user);
         user.recordLogin(Instant.now(clock));
         users.flush();
         return issue(user, Uuids.v7(), client, newUser);
@@ -103,17 +107,27 @@ public class AuthService {
             refreshTokens.revokeFamily(current.getFamilyId(), now);
             throw new BusinessException(IdentityErrorCode.USER_BLOCKED);
         }
+        syncSuperAdmin(user);
         AccessToken access = tokens.access(user);
         TokenService.IssuedRefresh next = tokens.refresh(user, current.getFamilyId(), client);
         current.rotate(now, next.id());
         return new AuthResult(access, next.raw(), next.expiresAt(), user, false);
     }
 
-    /** Joriy qurilma sessiyasini (refresh token family) bekor qiladi. Noma'lum token — jim o'tkaziladi. */
+    /**
+     * Joriy qurilma sessiyasini (refresh token family) bekor qiladi. Noma'lum token — jim o'tkaziladi.
+     *
+     * @param pushToken ixtiyoriy: shu qurilmaning push tokeni — chiqqandan keyin bildirishnoma kelmasligi uchun
+     */
     @Transactional
-    public void logout(String rawToken) {
-        refreshTokens.findByTokenHash(TokenService.sha256(rawToken))
-                .ifPresent(t -> refreshTokens.revokeFamily(t.getFamilyId(), Instant.now(clock)));
+    public void logout(String rawToken, String pushToken) {
+        refreshTokens.findByTokenHash(TokenService.sha256(rawToken)).ifPresent(t -> {
+            UUID userId = t.getUserId();
+            refreshTokens.revokeFamily(t.getFamilyId(), Instant.now(clock));
+            if (pushToken != null && !pushToken.isBlank()) {
+                pushTokens.revoke(userId, pushToken.strip());
+            }
+        });
     }
 
     /**
@@ -122,7 +136,7 @@ public class AuthService {
      */
     @Transactional
     public AccessTokenResult selectRole(UUID userId, Role role) {
-        if (role == Role.ADMIN) {
+        if (role == Role.ADMIN || role == Role.SUPER_ADMIN) {
             throw new BusinessException(IdentityErrorCode.ROLE_NOT_SELECTABLE);
         }
         User user = getUser(userId);
@@ -131,12 +145,35 @@ public class AuthService {
                     new IdentityEvents.RoleGranted(userId, role.name()));
             users.flush();
         }
+        syncSuperAdmin(user);
         return new AccessTokenResult(tokens.access(user), user);
+    }
+
+    /**
+     * SUPER_ADMIN ning yagona manbasi — {@code app.identity.super-admin-phones}: ro'yxatdan olinsa, admin
+     * huquqlari to'liq olinadi. Oddiy adminlar bazada ({@code AdminManagementService}).
+     */
+    private void syncSuperAdmin(User user) {
+        boolean listed = props.superAdminPhones().contains(user.getPhone());
+        if (listed && user.makeSuperAdmin()) {
+            audit.record(user.getId(), "user.super-admin-bootstrap", "user", user.getId(), Map.of());
+            log.warn("SUPER_ADMIN granted to {} via app.identity.super-admin-phones",
+                    PhoneNumber.mask(user.getPhone()));
+        } else if (!listed && user.isSuperAdmin()) {
+            user.removeAdmin();
+            audit.record(user.getId(), "user.super-admin-revoked", "user", user.getId(), Map.of());
+            log.warn("SUPER_ADMIN revoked from {}: not in app.identity.super-admin-phones",
+                    PhoneNumber.mask(user.getPhone()));
+            UUID userId = user.getId();
+            int version = user.getAuthzVersion();
+            AfterCommit.run(() -> revocations.authzChanged(userId, version));
+        }
     }
 
     @Transactional(readOnly = true)
     public User getUser(UUID userId) {
-        User user = users.findById(userId).orElseThrow(() -> BusinessException.notFound("User", userId));
+        User user = users.findById(userId).filter(u -> !u.isDeleted())
+                .orElseThrow(() -> BusinessException.notFound("User", userId));
         if (user.isBlocked()) {
             throw new BusinessException(IdentityErrorCode.USER_BLOCKED);
         }

@@ -41,7 +41,8 @@ class TokenService {
     }
 
     AccessToken access(User user) {
-        return accessTokens.issue(user.getId(), user.getPhone(), user.getRoles());
+        return accessTokens.issue(user.getId(), user.getPhone(), user.getRoles(), user.getPermissions(),
+                user.getAuthzVersion());
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

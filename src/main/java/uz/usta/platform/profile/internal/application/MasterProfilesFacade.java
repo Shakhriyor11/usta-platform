@@ -15,6 +15,7 @@ import uz.usta.platform.profile.ProfileEvents;
 import uz.usta.platform.profile.internal.domain.ProfileErrorCode;
 import uz.usta.platform.profile.internal.persistence.MasterProfileRepository;
 import uz.usta.platform.shared.error.BusinessException;
+import uz.usta.platform.shared.i18n.Messages;
 import uz.usta.platform.shared.outbox.OutboxPublisher;
 
 @Component
@@ -22,10 +23,12 @@ class MasterProfilesFacade implements MasterProfiles {
 
     private final MasterProfileRepository profiles;
     private final OutboxPublisher outbox;
+    private final Messages messages;
 
-    MasterProfilesFacade(MasterProfileRepository profiles, OutboxPublisher outbox) {
+    MasterProfilesFacade(MasterProfileRepository profiles, OutboxPublisher outbox, Messages messages) {
         this.profiles = profiles;
         this.outbox = outbox;
+        this.messages = messages;
     }
 
     @Override
@@ -65,8 +68,9 @@ class MasterProfilesFacade implements MasterProfiles {
             return Map.of();
         }
         return profiles.findAllById(masterIds).stream()
-                .map(m -> new MasterSummary(m.getId(), m.getFullName(), m.getAvatarKey(), m.getRatingAvg(),
-                        m.getRatingCount()))
+                .map(m -> new MasterSummary(m.getId(),
+                        m.getFullName().isEmpty() ? messages.get("user.deleted") : m.getFullName(), m.getAvatarKey(),
+                        m.getRatingAvg(), m.getRatingCount()))
                 .collect(Collectors.toMap(MasterSummary::masterId, Function.identity()));
     }
 

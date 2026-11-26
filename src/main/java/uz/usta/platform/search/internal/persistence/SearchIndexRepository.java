@@ -156,8 +156,14 @@ public class SearchIndexRepository {
 
     // ---------------------------------------------------------------- taqsimlash nomzodlari
 
-    public List<Candidate> nearest(UUID serviceId, double lat, double lng, int limit, Collection<UUID> exclude) {
-        String excludeSql = exclude.isEmpty() ? "" : "and m.master_id not in (:exclude)";
+    /** @param include faqat shu ustalar orasidan; {@code null} — hammasidan */
+    public List<Candidate> nearest(UUID serviceId, double lat, double lng, int limit, Collection<UUID> exclude,
+                                   Collection<UUID> include) {
+        if (include != null && include.isEmpty()) {
+            return List.of();
+        }
+        String excludeSql = (exclude.isEmpty() ? "" : "and m.master_id not in (:exclude) ")
+                + (include == null ? "" : "and m.master_id in (:include)");
         var spec = jdbc.sql("""
                         select m.master_id, ST_Distance(m.location, p.g, false) as distance_m, ms.price_from
                         from search_masters m
@@ -172,6 +178,9 @@ public class SearchIndexRepository {
                 .param("maxRadius", MAX_WORK_RADIUS_M).param("limit", limit);
         if (!exclude.isEmpty()) {
             spec = spec.param("exclude", exclude);
+        }
+        if (include != null) {
+            spec = spec.param("include", include);
         }
         return spec.query((rs, i) -> new Candidate(rs.getObject("master_id", UUID.class),
                 (int) Math.round(rs.getDouble("distance_m")), rs.getBigDecimal("price_from"))).list();

@@ -22,7 +22,6 @@ import uz.usta.platform.shared.error.BusinessException;
 import uz.usta.platform.shared.outbox.OutboxPublisher;
 import uz.usta.platform.storage.FilePurpose;
 import uz.usta.platform.storage.FileStorage;
-import uz.usta.platform.storage.StoredFile;
 
 /** Ustaning xizmatlari, narxlari va portfoliosi. */
 @Service
@@ -35,10 +34,11 @@ public class MasterCatalogService {
     private final FileStorage storage;
     private final OutboxPublisher outbox;
     private final CatalogProperties props;
+    private final ServiceAvailability availability;
 
     MasterCatalogService(MasterServicePriceRepository prices, ServiceDefinitionRepository services,
                          PortfolioItemRepository portfolio, MasterProfiles masters, FileStorage storage,
-                         OutboxPublisher outbox, CatalogProperties props) {
+                         OutboxPublisher outbox, CatalogProperties props, ServiceAvailability availability) {
         this.prices = prices;
         this.services = services;
         this.portfolio = portfolio;
@@ -46,6 +46,7 @@ public class MasterCatalogService {
         this.storage = storage;
         this.outbox = outbox;
         this.props = props;
+        this.availability = availability;
     }
 
     /** Usta xizmati va katalogdagi xizmat ta'rifi. */
@@ -70,7 +71,7 @@ public class MasterCatalogService {
     public MasterServiceView upsertService(UUID masterId, UUID serviceId, BigDecimal priceFrom, String description,
                                            boolean active) {
         masters.requireProfile(masterId);
-        ServiceDefinition service = services.findById(serviceId).filter(ServiceDefinition::isActive)
+        ServiceDefinition service = services.findById(serviceId).filter(availability::isAvailable)
                 .orElseThrow(() -> new BusinessException(CatalogErrorCode.SERVICE_NOT_AVAILABLE));
         MasterServicePrice price = prices.findByMasterIdAndServiceId(masterId, serviceId).orElse(null);
         if (price == null) {
@@ -94,11 +95,13 @@ public class MasterCatalogService {
     }
 
     private List<MasterServiceView> withDefinitions(List<MasterServicePrice> list, boolean onlyActiveServices) {
-        Map<UUID, ServiceDefinition> defs = services.findAllById(list.stream().map(MasterServicePrice::getServiceId).toList())
-                .stream().collect(Collectors.toMap(ServiceDefinition::getId, Function.identity()));
+        List<ServiceDefinition> found = services.findAllById(list.stream().map(MasterServicePrice::getServiceId)
+                .toList());
+        Map<UUID, ServiceDefinition> defs = (onlyActiveServices ? availability.available(found) : found).stream()
+                .filter(s -> !s.isDeleted())
+                .collect(Collectors.toMap(ServiceDefinition::getId, Function.identity()));
         return list.stream()
                 .filter(p -> defs.containsKey(p.getServiceId()))
-                .filter(p -> !onlyActiveServices || defs.get(p.getServiceId()).isActive())
                 .map(p -> new MasterServiceView(p, defs.get(p.getServiceId())))
                 .toList();
     }
@@ -121,15 +124,22 @@ public class MasterCatalogService {
         return portfolio.findByMasterIdOrderByCreatedAtDesc(masterId);
     }
 
-    @Transactional
+    /** Fayl DB tranzaksiyasi tashqarisida yuklanadi — sekin yuklash ulanishni band qilmaydi. */
     public PortfolioItem addPortfolioItem(UUID masterId, MultipartFile file, String description) {
         masters.requireProfile(masterId);
+        requirePortfolioRoom(masterId);
+        String text = description == null || description.isBlank() ? null : description.strip();
+        return storage.storeAndSave(FilePurpose.PORTFOLIO, masterId, file, stored -> {
+            requirePortfolioRoom(masterId);
+            return portfolio.saveAndFlush(new PortfolioItem(masterId, stored.key(), stored.contentType(),
+                    stored.sizeBytes(), text));
+        });
+    }
+
+    private void requirePortfolioRoom(UUID masterId) {
         if (portfolio.countByMasterId(masterId) >= props.maxPortfolioItems()) {
             throw new BusinessException(CatalogErrorCode.PORTFOLIO_LIMIT_EXCEEDED, props.maxPortfolioItems());
         }
-        StoredFile stored = storage.store(FilePurpose.PORTFOLIO, masterId, file);
-        return portfolio.saveAndFlush(new PortfolioItem(masterId, stored.key(), stored.contentType(), stored.sizeBytes(),
-                description == null || description.isBlank() ? null : description.strip()));
     }
 
     @Transactional

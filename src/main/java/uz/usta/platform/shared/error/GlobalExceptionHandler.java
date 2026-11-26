@@ -6,6 +6,9 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.regex.Pattern;
+import java.util.Arrays;
 import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,8 +16,10 @@ import org.slf4j.MDC;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -72,6 +77,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private static final String TYPE_PREFIX = "urn:usta:error:";
+    /** Enum nomi yoki ularning ro'yxati: {@code IN_PROGRESS}, {@code PASSPORT, SELFIE}. */
+    private static final Pattern CODE_LIST = Pattern.compile("[A-Z][A-Z_]+(, [A-Z][A-Z_]+)*");
 
     private final MessageSource messages;
     private final AuthenticationTrustResolver trustResolver = new AuthenticationTrustResolverImpl();
@@ -118,6 +125,23 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     // ---------------------------------------------------------------- ma'lumotlar bazasi
+
+    /** {@code ?sort=} da mavjud bo'lmagan maydon — mijoz xatosi. */
+    @ExceptionHandler(PropertyReferenceException.class)
+    ResponseEntity<ProblemDetail> handleUnknownProperty(PropertyReferenceException ex, HttpServletRequest request) {
+        log.debug("Unknown property on {}: {}", request.getRequestURI(), ex.getMessage());
+        return respond(problem(CommonErrorCode.BAD_REQUEST, request.getRequestURI()));
+    }
+
+    /** So'rov (query) darajasidagi xato: {@code ?sort=} berilgan bo'lsa — o'sha sabab (400), aks holda bizniki. */
+    @ExceptionHandler(InvalidDataAccessApiUsageException.class)
+    ResponseEntity<ProblemDetail> handleQueryUsage(InvalidDataAccessApiUsageException ex, HttpServletRequest request) {
+        if (request.getParameter("sort") == null) {
+            return handleUnexpected(ex, request);
+        }
+        log.debug("Invalid sort on {}: {}", request.getRequestURI(), ex.getMessage());
+        return respond(problem(CommonErrorCode.BAD_REQUEST, request.getRequestURI()));
+    }
 
     @ExceptionHandler({OptimisticLockingFailureException.class, PessimisticLockingFailureException.class})
     ResponseEntity<ProblemDetail> handleLocking(RuntimeException ex, HttpServletRequest request) {
@@ -226,8 +250,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private ProblemDetail problem(ErrorCode code, String instance, Object... args) {
         Locale locale = LocaleContextHolder.getLocale();
-        String title = messages.getMessage(code.messageKey(), null, code.code(), locale);
-        String detail = args.length == 0 ? title : messages.getMessage(code.messageKey(), args, title, locale);
+        String template = messages.getMessage(code.messageKey(), null, code.code(), locale);
+        String detail = args.length == 0 ? template
+                : messages.getMessage(code.messageKey(), localized(code, args, locale), template, locale);
+        // sarlavhada to'ldirilmagan {0} ko'rinmasin
+        String title = template.contains("{0}") ? detail : template;
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(code.status(), detail);
         pd.setType(URI.create(TYPE_PREFIX + code.code().toLowerCase(Locale.ROOT)));
         pd.setTitle(title);
@@ -238,6 +265,27 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         pd.setProperty("traceId", MDC.get(RequestCorrelationFilter.MDC_KEY));
         pd.setProperty("timestamp", Instant.now().toString());
         return pd;
+    }
+
+    /**
+     * Xabarga qo'yiladigan kodlarni o'qiladigan matnga o'giradi: resurs nomi ({@code resource.*}) hamda holat va tur
+     * nomlari ({@code status.*}). Tarjimasi yo'q qiymat o'zicha qoladi.
+     */
+    private Object[] localized(ErrorCode code, Object[] args, Locale locale) {
+        Object[] result = args.clone();
+        for (int i = 0; i < result.length; i++) {
+            if (!(result[i] instanceof String value)) {
+                continue;
+            }
+            if (code == CommonErrorCode.RESOURCE_NOT_FOUND && i == 0) {
+                result[i] = messages.getMessage("resource." + value, null, value, locale);
+            } else if (CODE_LIST.matcher(value).matches()) {
+                result[i] = Arrays.stream(value.split(", "))
+                        .map(c -> messages.getMessage("status." + c, null, c, locale))
+                        .collect(Collectors.joining(", "));
+            }
+        }
+        return result;
     }
 
     private static ResponseEntity<ProblemDetail> respond(ProblemDetail pd) {

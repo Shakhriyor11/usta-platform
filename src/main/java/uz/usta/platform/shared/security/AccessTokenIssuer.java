@@ -21,6 +21,8 @@ public class AccessTokenIssuer {
 
     static final String CLAIM_PHONE = "phone";
     static final String CLAIM_ROLES = "roles";
+    static final String CLAIM_PERMISSIONS = "perms";
+    static final String CLAIM_AUTHZ_VERSION = "av";
     static final String CLAIM_TYPE = "typ";
     static final String TYPE_ACCESS = "access";
 
@@ -34,7 +36,8 @@ public class AccessTokenIssuer {
         this.clock = clock;
     }
 
-    public AccessToken issue(UUID userId, String phone, Collection<Role> roles) {
+    public AccessToken issue(UUID userId, String phone, Collection<Role> roles,
+                             Collection<AdminPermission> permissions, int authzVersion) {
         Instant now = Instant.now(clock);
         Instant exp = now.plus(props.accessTokenTtl());
         JwtClaimsSet claims = JwtClaimsSet.builder()
@@ -46,6 +49,8 @@ public class AccessTokenIssuer {
                 .claim(CLAIM_TYPE, TYPE_ACCESS)
                 .claim(CLAIM_PHONE, phone)
                 .claim(CLAIM_ROLES, roles.stream().map(Role::name).sorted().toList())
+                .claim(CLAIM_PERMISSIONS, permissions.stream().map(AdminPermission::name).sorted().toList())
+                .claim(CLAIM_AUTHZ_VERSION, authzVersion)
                 .build();
         String token = encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
                 .getTokenValue();

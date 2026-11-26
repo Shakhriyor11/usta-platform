@@ -62,6 +62,8 @@ public class SearchIndexer {
         CatalogEvents.CatalogChanged e = json.readValue(m.payload(), CatalogEvents.CatalogChanged.class);
         if ("service".equals(e.entity())) {
             catalog.mastersOffering(e.id()).forEach(this::reindex);
+        } else if ("category".equals(e.entity())) {
+            catalog.mastersOfferingInCategory(e.id()).forEach(this::reindex);
         }
     }
 

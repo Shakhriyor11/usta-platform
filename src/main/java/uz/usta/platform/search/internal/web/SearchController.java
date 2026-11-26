@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.usta.platform.search.internal.application.MasterSearchService;
 import uz.usta.platform.shared.security.AuthenticatedUser;
+import uz.usta.platform.shared.security.Role;
 import uz.usta.platform.shared.web.ApiPaths;
 import uz.usta.platform.shared.web.PageResponse;
 import uz.usta.platform.storage.FileStorage;
@@ -62,8 +63,9 @@ class SearchController {
             @RequestParam(defaultValue = "RATING") MasterSearchService.SearchSort sort,
             @RequestParam(defaultValue = "0") @Min(0) @Max(1000) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size) {
-        MasterSearchService.Result r = search.search(new MasterSearchService.Query(user.id(), serviceId, categoryId,
-                lat, lng, addressId, radiusKm, minRating, priceMin, priceMax, onlineOnly, sort, page, size));
+        MasterSearchService.Result r = search.search(new MasterSearchService.Query(user.id(),
+                user.hasRole(Role.MASTER), serviceId, categoryId, lat, lng, addressId, radiusKm, minRating, priceMin,
+                priceMax, onlineOnly, sort, page, size));
         var items = r.hits().stream().map(this::toItem).toList();
         long total = r.total();
         return new PageResponse<>(items, page, size, total, (int) ((total + size - 1) / size));

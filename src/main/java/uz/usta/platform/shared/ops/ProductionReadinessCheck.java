@@ -14,10 +14,14 @@ import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /**
- * Production profilida ishga tushganda xavfli/lokal sozlamalarni tekshiradi (standart JWT siri, SMS/push stub,
- * Swagger ochiq, localhost CORS/S3 manzili...). Har biri WARN logga va {@code app.config.warnings} metrikasiga
- * tushadi — Grafana alert'i (ProductionConfigWarnings) shu metrikaga qaraydi. Ilovani to'xtatmaydi:
- * {@code docker compose up -d} lokal standartlar bilan ham ishga tushishi kerak.
+ * Production profilida sozlamalarni tekshiradi.
+ *
+ * <p>Autentifikatsiyani butunlay chetlab o'tishga imkon beradiganlari — namunaviy JWT siri (admin token yasash
+ * mumkin) va doimiy OTP kodi (istalgan raqam bilan kirish mumkin) — ilovani ishga tushirmaydi.
+ *
+ * <p>Qolgan xavfli/lokal sozlamalar (SMS/push stub, Swagger ochiq, standart parollar, localhost CORS/S3 manzili...)
+ * WARN logga va {@code app.config.warnings} metrikasiga tushadi — Grafana alert'i (ProductionConfigWarnings) shu
+ * metrikaga qaraydi.
  */
 @Component
 @Profile("prod")
@@ -29,17 +33,37 @@ class ProductionReadinessCheck {
     private final List<String> warnings = new ArrayList<>();
 
     ProductionReadinessCheck(Environment env, MeterRegistry registry) {
+        rejectUnsafe(env);
         this.env = env;
         Gauge.builder("app.config.warnings", warnings, List::size)
                 .description("Production uchun xavfli sozlamalar soni (0 bo'lishi kerak)").register(registry);
     }
 
+    static void rejectUnsafe(Environment env) {
+        if (isPlaceholder(env.getProperty("app.security.jwt.secret", ""))) {
+            throw new IllegalStateException("Production: JWT_SECRET is a default/placeholder value — set a random "
+                    + "secret (openssl rand -base64 48)");
+        }
+        if (!env.getProperty("app.identity.otp.fixed-code", "").isBlank()) {
+            throw new IllegalStateException("Production: OTP_FIXED_CODE must be empty — it lets anyone sign in "
+                    + "as any phone number");
+        }
+    }
+
+    private static boolean isPlaceholder(String value) {
+        String v = value.toLowerCase(Locale.ROOT);
+        return v.contains("change-me") || v.contains("insecure") || v.contains("local-dev");
+    }
+
     @EventListener(ApplicationReadyEvent.class)
     void check() {
         warnings.clear();
-        String secret = env.getProperty("app.security.jwt.secret", "").toLowerCase(Locale.ROOT);
-        if (secret.contains("change-me") || secret.contains("insecure") || secret.contains("local-dev")) {
-            warnings.add("JWT_SECRET is a default/placeholder value — set a random secret (openssl rand -base64 48)");
+        String dbPassword = env.getProperty("spring.datasource.password", "");
+        String redisPassword = env.getProperty("spring.data.redis.password", "");
+        String s3Secret = env.getProperty("app.storage.secret-key", "");
+        if (dbPassword.equals("usta") || redisPassword.equals("usta") || s3Secret.equals("usta-minio-secret")
+                || isPlaceholder(dbPassword) || isPlaceholder(redisPassword) || isPlaceholder(s3Secret)) {
+            warnings.add("Database, Redis or S3 uses a default/placeholder password");
         }
         if ("log".equals(env.getProperty("app.sms.provider", "log"))) {
             warnings.add("SMS_PROVIDER=log — OTP codes are written to logs and NOT delivered");
@@ -57,8 +81,8 @@ class ProductionReadinessCheck {
         if (s3.contains("localhost") || s3.contains("127.0.0.1")) {
             warnings.add("S3_PUBLIC_ENDPOINT points to localhost — file URLs will not open on clients");
         }
-        if (env.getProperty("app.identity.admin-phones", "").isBlank()) {
-            warnings.add("ADMIN_PHONES is empty — no way to bootstrap an administrator");
+        if (env.getProperty("app.identity.super-admin-phones", "").isBlank()) {
+            warnings.add("SUPER_ADMIN_PHONES is empty — no way to bootstrap an administrator");
         }
         if (warnings.isEmpty()) {
             log.info("Production readiness check passed");

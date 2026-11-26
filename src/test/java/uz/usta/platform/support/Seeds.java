@@ -14,10 +14,10 @@ public final class Seeds {
     public static final UUID TOILET_INSTALL = id("svc:toilet-install");
     public static final UUID PLUMBING = id("cat:plumbing");
 
-    /** Minimal haqiqiy PNG (magic bytes) — storage turini baytlar bo'yicha aniqlaydi. */
+    /** Minimal haqiqiy 1x1 PNG — storage turi va tuzilishini tekshiradi. */
     public static final byte[] PNG = HexFormat.of().parseHex(
-            "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360000002"
-                    + "000154a24f5d0000000049454e44ae426082");
+            "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000b49444154789c63600002000005"
+                    + "00017a5eab3f0000000049454e44ae426082");
 
     private Seeds() {
     }

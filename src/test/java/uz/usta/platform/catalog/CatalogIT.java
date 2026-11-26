@@ -101,7 +101,7 @@ class CatalogIT {
         mvc.perform(post("/api/v1/admin/catalog/services").header("Authorization", admin.bearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"categoryId":"%s","slug":"%s","name":{"uz":"Test xizmat","ru":"Тест"},
+                                {"categoryId":"%s","slug":"%s","name":{"uz":"Test xizmat","ru":"Тест","en":"Test service"},
                                  "description":{"uz":"Tavsif"}}""".formatted(leafId, slug("svc"))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.description.uz").value("Tavsif"));
@@ -138,8 +138,8 @@ class CatalogIT {
 
     private static String categoryJson(String parentId, String slug, String status) {
         return """
-                {"parentId":%s,"slug":"%s","name":{"uz":"Test %s"},"status":"%s"}"""
-                .formatted(parentId == null ? "null" : "\"" + parentId + "\"", slug, slug, status);
+                {"parentId":%s,"slug":"%s","name":{"uz":"Test %s","ru":"Тест %s","en":"Test %s"},"status":"%s"}"""
+                .formatted(parentId == null ? "null" : "\"" + parentId + "\"", slug, slug, slug, slug, status);
     }
 
     private String categoryId(String slug) throws Exception {

@@ -10,6 +10,8 @@ public enum CommonErrorCode implements ErrorCode {
     BAD_REQUEST(HttpStatus.BAD_REQUEST, "error.bad-request"),
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "error.unauthorized"),
     ACCESS_DENIED(HttpStatus.FORBIDDEN, "error.access-denied"),
+    /** Rol yoki huquqlar o'zgargan — access token'ni refresh qilish kerak. */
+    TOKEN_OUTDATED(HttpStatus.UNAUTHORIZED, "error.token-outdated"),
     /** Foydalanuvchi bloklangan (access token hali amal qilsa ham). */
     USER_BLOCKED(HttpStatus.FORBIDDEN, "error.identity.user-blocked"),
     NOT_FOUND(HttpStatus.NOT_FOUND, "error.not-found"),

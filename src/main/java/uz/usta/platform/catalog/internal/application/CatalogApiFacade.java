@@ -32,18 +32,20 @@ class CatalogApiFacade implements CatalogApi {
     private final CategoryRepository categories;
     private final ServiceDefinitionRepository services;
     private final MasterServicePriceRepository prices;
+    private final ServiceAvailability availability;
 
     CatalogApiFacade(CategoryRepository categories, ServiceDefinitionRepository services,
-                     MasterServicePriceRepository prices) {
+                     MasterServicePriceRepository prices, ServiceAvailability availability) {
         this.categories = categories;
         this.services = services;
         this.prices = prices;
+        this.availability = availability;
     }
 
     @Override
     @Transactional(readOnly = true)
     public ServiceInfo requireActiveService(UUID serviceId) {
-        return services.findById(serviceId).filter(ServiceDefinition::isActive)
+        return services.findById(serviceId).filter(availability::isAvailable)
                 .map(s -> new ServiceInfo(s.getId(), s.getCategoryId(), s.getName()))
                 .orElseThrow(() -> new BusinessException(CatalogErrorCode.SERVICE_NOT_AVAILABLE));
     }
@@ -93,10 +95,11 @@ class CatalogApiFacade implements CatalogApi {
         if (list.isEmpty()) {
             return List.of();
         }
-        Map<UUID, ServiceDefinition> defs = services.findAllById(list.stream().map(MasterServicePrice::getServiceId)
-                .toList()).stream().collect(Collectors.toMap(ServiceDefinition::getId, Function.identity()));
+        Map<UUID, ServiceDefinition> defs = availability.available(services.findAllById(list.stream()
+                .map(MasterServicePrice::getServiceId).toList())).stream()
+                .collect(Collectors.toMap(ServiceDefinition::getId, Function.identity()));
         return list.stream()
-                .filter(p -> defs.containsKey(p.getServiceId()) && defs.get(p.getServiceId()).isActive())
+                .filter(p -> defs.containsKey(p.getServiceId()))
                 .map(p -> new Offering(p.getServiceId(), p.getPriceFrom()))
                 .toList();
     }
@@ -112,5 +115,18 @@ class CatalogApiFacade implements CatalogApi {
     @Transactional(readOnly = true)
     public List<UUID> mastersOffering(UUID serviceId) {
         return prices.findMasterIdsByServiceId(serviceId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UUID> mastersOfferingInCategory(UUID categoryId) {
+        Map<UUID, List<UUID>> children = new HashMap<>();
+        categories.findAll().forEach(c -> children.computeIfAbsent(c.getParentId(), k -> new ArrayList<>())
+                .add(c.getId()));
+        List<UUID> subtree = new ArrayList<>(List.of(categoryId));
+        for (int i = 0; i < subtree.size(); i++) {
+            subtree.addAll(children.getOrDefault(subtree.get(i), List.of()));
+        }
+        return prices.findMasterIdsByCategoryIds(subtree);
     }
 }

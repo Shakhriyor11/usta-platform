@@ -9,6 +9,12 @@ import java.util.UUID;
 public interface OrderApi {
 
     /**
+     * Shikoyat orqali ochilgan nizo sababi: {@code complaint:<ComplaintReason nomi>}. Bazada kod saqlanadi, matn
+     * o'qish paytida foydalanuvchi tilida chiqadi.
+     */
+    String COMPLAINT_REASON_PREFIX = "complaint:";
+
+    /**
      * Buyurtmani qulflaydi va mijoz uni baholay olishini tekshiradi (egasi va holati COMPLETED/COMMISSION).
      * Chaqiruvchining tranzaksiyasida bajariladi.
      *

@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import uz.usta.platform.identity.internal.application.AuthService;
 import uz.usta.platform.identity.internal.application.OtpService;
+import uz.usta.platform.identity.internal.web.IdentityDtos.LogoutRequest;
 import uz.usta.platform.identity.internal.web.IdentityDtos.OtpChallengeResponse;
 import uz.usta.platform.identity.internal.web.IdentityDtos.OtpRequest;
 import uz.usta.platform.identity.internal.web.IdentityDtos.OtpVerifyRequest;
@@ -59,7 +60,7 @@ class AuthController {
     @Operation(summary = "Chiqish (joriy sessiyani bekor qilish)")
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    void logout(@Valid @RequestBody RefreshRequest body) {
-        auth.logout(body.refreshToken());
+    void logout(@Valid @RequestBody LogoutRequest body) {
+        auth.logout(body.refreshToken(), body.pushToken());
     }
 }

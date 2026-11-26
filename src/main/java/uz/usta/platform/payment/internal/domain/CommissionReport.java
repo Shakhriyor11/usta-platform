@@ -44,6 +44,10 @@ public class CommissionReport extends AuditableEntity {
     @Column(name = "paid_at")
     private Instant paidAt;
 
+    /** Buyurtma bo'yicha nizo ochiq: hisob-fakturaga va to'lanadigan summaga kirmaydi. */
+    @Column(name = "on_hold", nullable = false)
+    private boolean onHold;
+
     protected CommissionReport() {
     }
 
@@ -59,6 +63,24 @@ public class CommissionReport extends AuditableEntity {
 
     public void cancel() {
         this.status = CommissionStatus.CANCELLED;
+        this.onHold = false;
+    }
+
+    public void hold() {
+        this.onHold = true;
+    }
+
+    public void release() {
+        this.onHold = false;
+    }
+
+    public void markPaid(Instant now) {
+        this.status = CommissionStatus.PAID;
+        this.paidAt = now;
+    }
+
+    public boolean isOnHold() {
+        return onHold;
     }
 
     public UUID getMasterId() {

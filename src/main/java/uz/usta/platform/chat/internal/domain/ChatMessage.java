@@ -26,6 +26,16 @@ public class ChatMessage extends BaseEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** Rasm ({@code content} — ixtiyoriy izoh, bo'sh bo'lishi mumkin). */
+    @Column(name = "image_key", updatable = false, length = 512)
+    private String imageKey;
+
+    @Column(name = "image_type", updatable = false, length = 100)
+    private String imageType;
+
+    @Column(name = "image_size", updatable = false)
+    private Long imageSize;
+
     protected ChatMessage() {
     }
 
@@ -34,6 +44,16 @@ public class ChatMessage extends BaseEntity {
         this.senderId = senderId;
         this.content = content;
         this.createdAt = createdAt;
+    }
+
+    public void attachImage(String key, String type, long size) {
+        this.imageKey = key;
+        this.imageType = type;
+        this.imageSize = size;
+    }
+
+    public String getImageKey() {
+        return imageKey;
     }
 
     public UUID getChatId() {

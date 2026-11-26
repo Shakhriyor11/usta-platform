@@ -4,7 +4,10 @@ package uz.usta.platform.shared.security;
 public enum Role {
     CUSTOMER,
     MASTER,
-    ADMIN;
+    /** Admin panel; qaysi bo'limlarga kirishi {@link AdminPermission} bilan belgilanadi. */
+    ADMIN,
+    /** Barcha huquqlar + adminlarni boshqarish. Faqat konfiguratsiya orqali ({@code SUPER_ADMIN_PHONES}). */
+    SUPER_ADMIN;
 
     public String authority() {
         return "ROLE_" + name();

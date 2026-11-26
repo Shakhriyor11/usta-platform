@@ -14,7 +14,12 @@ public enum IdentityErrorCode implements ErrorCode {
     REFRESH_TOKEN_REUSED(HttpStatus.UNAUTHORIZED, "error.identity.refresh-token-reused"),
     USER_BLOCKED(HttpStatus.FORBIDDEN, "error.identity.user-blocked"),
     ROLE_NOT_SELECTABLE(HttpStatus.BAD_REQUEST, "error.identity.role-not-selectable"),
-    CANNOT_BLOCK_ADMIN(HttpStatus.CONFLICT, "error.identity.cannot-block-admin");
+    CANNOT_BLOCK_ADMIN(HttpStatus.CONFLICT, "error.identity.cannot-block-admin"),
+    ADMIN_REQUIRES_SUPER_ADMIN(HttpStatus.FORBIDDEN, "error.identity.admin-requires-super-admin"),
+    SUPER_ADMIN_IMMUTABLE(HttpStatus.CONFLICT, "error.identity.super-admin-immutable"),
+    CANNOT_DELETE_SELF(HttpStatus.CONFLICT, "error.identity.cannot-delete-self"),
+    USER_DELETED(HttpStatus.CONFLICT, "error.identity.user-deleted"),
+    CANNOT_APPOINT_BLOCKED(HttpStatus.CONFLICT, "error.identity.cannot-appoint-blocked");
 
     private final HttpStatus status;
     private final String messageKey;

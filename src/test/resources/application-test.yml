@@ -6,12 +6,19 @@ app:
   outbox:
     retry-backoff: PT0S
   identity:
-    admin-phones: "+998990000001"
+    super-admin-phones: "+998990000001"
     refresh-reuse-grace: PT0S   # reuse detection'ni darhol tekshirish uchun
     otp:
       per-phone-limit: 10000
       per-ip-limit: 10000
       verify-per-ip-limit: 10000
+      per-phone-daily-limit: 10000
+  order:
+    create-limit: 10000
+  complaint:
+    create-limit: 10000
+  upload:
+    limit: 10000
 
 logging:
   level:

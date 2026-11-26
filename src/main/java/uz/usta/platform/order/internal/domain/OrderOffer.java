@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
@@ -25,14 +26,18 @@ public class OrderOffer extends BaseEntity {
     @Column(name = "offer_status", nullable = false, length = 16)
     private OfferStatus status = OfferStatus.PENDING;
 
-    @Column(name = "distance_m", nullable = false, updatable = false)
+    @Column(name = "distance_m", nullable = false)
     private int distanceMeters;
+
+    /** Taklif yuborilgan paytdagi ustaning "narx dan" qiymati — mijozga taxminiy narx uchun. */
+    @Column(name = "price_from", precision = 14, scale = 2)
+    private BigDecimal priceFrom;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    @Column(name = "expires_at", nullable = false, updatable = false)
+    @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
     @Column(name = "responded_at")
@@ -41,11 +46,25 @@ public class OrderOffer extends BaseEntity {
     protected OrderOffer() {
     }
 
-    public OrderOffer(UUID orderId, UUID masterId, int distanceMeters, Instant expiresAt) {
+    public OrderOffer(UUID orderId, UUID masterId, int distanceMeters, BigDecimal priceFrom, Instant expiresAt) {
         this.orderId = orderId;
         this.masterId = masterId;
         this.distanceMeters = distanceMeters;
+        this.priceFrom = priceFrom;
         this.expiresAt = expiresAt;
+    }
+
+    /** Boshqa usta qabul qilgani uchun yopilgan taklifni qayta ochish (u usta voz kechganda). */
+    public void reopen(int distanceMeters, BigDecimal priceFrom, Instant expiresAt) {
+        this.status = OfferStatus.PENDING;
+        this.distanceMeters = distanceMeters;
+        this.priceFrom = priceFrom;
+        this.expiresAt = expiresAt;
+        this.respondedAt = null;
+    }
+
+    public BigDecimal getPriceFrom() {
+        return priceFrom;
     }
 
     public boolean isOpen(Instant now) {

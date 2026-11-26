@@ -28,27 +28,34 @@ wait_healthy() {
   return 1
 }
 
+# api nosog'lom bo'lsa `compose up` xato bilan qaytadi (nginx `service_healthy` ni kutadi), shuning uchun up har
+# doim `if` ichida chaqiriladi — aks holda `set -e` skriptni rollback'gacha to'xtatadi. `if` ichida `set -e`
+# ishlamaydi, shu sabab buyruqlar `&&` bilan bog'langan.
 up() {
-  API_IMAGE="$1" docker compose pull api
-  API_IMAGE="$1" docker compose up -d --no-build api nginx
+  API_IMAGE="$1" docker compose pull api \
+    && API_IMAGE="$1" docker compose up -d --no-build api nginx
 }
 
 log "backup"
 ./scripts/backup.sh
 
 log "deploying $NEW_IMAGE (previous: ${PREV_IMAGE:-none})"
-up "$NEW_IMAGE"
-if wait_healthy; then
+if up "$NEW_IMAGE" && wait_healthy; then
   echo "$NEW_IMAGE" > "$STATE_FILE"
   log "OK — $NEW_IMAGE is healthy"
   exit 0
 fi
 
-log "FAILED — api is not healthy within ${HEALTH_TIMEOUT}s"
+log "FAILED — $NEW_IMAGE did not become healthy"
 docker compose logs --tail 100 api || true
-if [[ -n "$PREV_IMAGE" ]]; then
+if [[ -z "$PREV_IMAGE" ]]; then
+  log "no previous image recorded — manual intervention required"
+else
   log "rolling back to $PREV_IMAGE"
-  up "$PREV_IMAGE"
-  wait_healthy && log "rollback OK" || log "ROLLBACK FAILED — manual intervention required"
+  if up "$PREV_IMAGE" && wait_healthy; then
+    log "rollback OK"
+  else
+    log "ROLLBACK FAILED — manual intervention required"
+  fi
 fi
 exit 1

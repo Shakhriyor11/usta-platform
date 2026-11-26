@@ -11,7 +11,8 @@ public enum ProfileErrorCode implements ErrorCode {
     VERIFICATION_WORK_AREA_REQUIRED(HttpStatus.BAD_REQUEST, "error.profile.verification-work-area-required"),
     DOCUMENTS_LOCKED(HttpStatus.CONFLICT, "error.profile.documents-locked"),
     DOCUMENT_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "error.profile.document-limit-exceeded"),
-    ADDRESS_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "error.profile.address-limit-exceeded");
+    ADDRESS_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "error.profile.address-limit-exceeded"),
+    IDENTITY_LOCKED(HttpStatus.CONFLICT, "error.profile.identity-locked");
 
     private final HttpStatus status;
     private final String messageKey;

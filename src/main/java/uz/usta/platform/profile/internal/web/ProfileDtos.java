@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.UUID;
 import uz.usta.platform.profile.internal.domain.DocumentType;
 import uz.usta.platform.profile.internal.domain.VerificationStatus;
+import uz.usta.platform.shared.validation.PlainText;
 import uz.usta.platform.shared.web.GeoPoint;
 
 final class ProfileDtos {
@@ -22,7 +23,8 @@ final class ProfileDtos {
 
     // ---------------------------------------------------------------- mijoz
 
-    record CustomerProfileRequest(@Schema(example = "Aziz Karimov") @NotBlank @Size(max = 120) String fullName) {
+    record CustomerProfileRequest(
+            @Schema(example = "Aziz Karimov") @NotBlank @Size(min = 2, max = 120) @PlainText String fullName) {
     }
 
     record CustomerProfileResponse(UUID userId, String fullName, String avatarUrl, Instant createdAt,
@@ -30,9 +32,9 @@ final class ProfileDtos {
     }
 
     record AddressRequest(
-            @Schema(example = "Uy") @NotBlank @Size(max = 60) String title,
-            @Schema(example = "Toshkent, Chilonzor tumani, 9-kvartal, 12-uy") @NotBlank @Size(max = 500) String address,
-            @Schema(example = "3-podyezd, 4-qavat, 45-xonadon") @Size(max = 255) String details,
+            @Schema(example = "Uy") @NotBlank @Size(max = 60) @PlainText String title,
+            @Schema(example = "Toshkent, Chilonzor tumani, 9-kvartal, 12-uy") @NotBlank @Size(max = 500) @PlainText String address,
+            @Schema(example = "3-podyezd, 4-qavat, 45-xonadon") @Size(max = 255) @PlainText String details,
             @NotNull @Valid GeoPoint location,
             @Schema(description = "true — asosiy manzil qilib belgilash") Boolean isDefault) {
     }
@@ -44,8 +46,8 @@ final class ProfileDtos {
     // ---------------------------------------------------------------- usta
 
     record MasterProfileRequest(
-            @Schema(example = "Botir Usmonov") @NotBlank @Size(max = 120) String fullName,
-            @Size(max = 2000) String bio,
+            @Schema(example = "Botir Usmonov") @NotBlank @Size(min = 2, max = 120) @PlainText String fullName,
+            @Size(max = 2000) @PlainText String bio,
             @NotNull @Min(0) @Max(70) Integer experienceYears,
             @Schema(description = "Ish hududi markazi (verifikatsiyaga yuborish uchun majburiy)") @Valid GeoPoint workLocation,
             @Schema(example = "10", description = "Ish hududi radiusi, km") @NotNull @Min(1) @Max(200) Integer workRadiusKm) {
@@ -75,6 +77,6 @@ final class ProfileDtos {
     record AdminMasterDetailResponse(String phone, MasterProfileResponse profile, List<DocumentResponse> documents) {
     }
 
-    record RejectMasterRequest(@NotBlank @Size(max = 1000) String reason) {
+    record RejectMasterRequest(@NotBlank @Size(max = 1000) @PlainText String reason) {
     }
 }

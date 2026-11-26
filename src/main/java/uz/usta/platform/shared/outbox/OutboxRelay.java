@@ -25,8 +25,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <ul>
  *   <li>Har bir xabar alohida tranzaksiyada qayta ishlanadi; {@code FOR UPDATE SKIP LOCKED} tufayli
  *       bir nechta instansiya parallel ishlay oladi va bitta xabar ikki marta olinmaydi.</li>
- *   <li>Xatolikda {@code attempts} oshiriladi va {@code next_attempt_at} chiziqli backoff bilan
- *       suriladi; {@code maxAttempts} ga yetgan xabar "dead" bo'lib qoladi (metrika orqali kuzatiladi).</li>
+ *   <li>Xatolikda {@code attempts} oshiriladi va {@code next_attempt_at} eksponensial backoff bilan
+ *       suriladi; {@code maxAttempts} ga yetgan xabar "dead" bo'lib qoladi (metrika orqali kuzatiladi,
+ *       {@link OutboxDeadLetters} orqali qayta yuboriladi).</li>
  * </ul>
  */
 @Component
@@ -35,6 +36,7 @@ public class OutboxRelay {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxRelay.class);
     private static final int MAX_ERROR_LENGTH = 2000;
+    private static final long MAX_BACKOFF_SECONDS = 3600;
 
     private final JdbcClient jdbc;
     private final TransactionTemplate tx;
@@ -145,7 +147,9 @@ public class OutboxRelay {
 
     private void recordFailure(OutboxMessage m, RuntimeException e) {
         failed.increment();
-        long backoffSeconds = props.retryBackoff().toSeconds() * m.attempt();
+        // eksponensial (1x, 2x, 4x ... 1 soatgacha): uzoqroq uzilishda ham xabar "dead" bo'lib qolmaydi
+        long backoffSeconds = Math.min(props.retryBackoff().toSeconds() << Math.min(m.attempt() - 1, 20),
+                MAX_BACKOFF_SECONDS);
         String error = e.getClass().getSimpleName() + ": " + e.getMessage();
         if (error.length() > MAX_ERROR_LENGTH) {
             error = error.substring(0, MAX_ERROR_LENGTH);

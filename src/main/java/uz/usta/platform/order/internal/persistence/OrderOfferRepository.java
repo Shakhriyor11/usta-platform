@@ -19,8 +19,11 @@ public interface OrderOfferRepository extends JpaRepository<OrderOffer, UUID> {
 
     boolean existsByOrderIdAndStatus(UUID orderId, OfferStatus status);
 
-    @Query("select f.masterId from OrderOffer f where f.orderId = :orderId")
-    List<UUID> findMasterIdsByOrderId(@Param("orderId") UUID orderId);
+    /** Ustada javob kutayotgan takliflari bor buyurtmalar. */
+    @Query("""
+            select f.orderId from OrderOffer f
+            where f.masterId = :masterId and f.status = uz.usta.platform.order.internal.domain.OfferStatus.PENDING""")
+    List<UUID> findPendingOrderIds(@Param("masterId") UUID masterId);
 
     /** Ustaning hali javob berilmagan va muddati tugamagan takliflari. */
     @Query("""

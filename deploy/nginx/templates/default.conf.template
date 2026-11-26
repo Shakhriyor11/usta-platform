@@ -4,6 +4,14 @@
 limit_req_zone $binary_remote_addr zone=api_per_ip:20m rate=${NGINX_API_RATE};
 limit_req_zone $binary_remote_addr zone=auth_per_ip:10m rate=${NGINX_AUTH_RATE};
 
+# Edge 429 matni ham mijoz tilida (ilovadagi error.too-many-requests bilan bir xil)
+map $http_accept_language $rate_limit_message {
+    default        "Soʻrovlar soni juda koʻp, birozdan soʻng urinib koʻring";
+    "~*^uz-Cyrl"   "Сўровлар сони жуда кўп, бироздан сўнг уриниб кўринг";
+    "~*^ru"        "Слишком много запросов, повторите позже";
+    "~*^en"        "Too many requests, please try again later";
+}
+
 # nginx image ishga tushganda ${SERVER_NAME} envsubst orqali almashtiriladi.
 
 server {
@@ -43,8 +51,10 @@ server {
     error_page 429 = @rate_limited;
     location @rate_limited {
         default_type application/problem+json;
+        charset utf-8;
+        charset_types application/problem+json;
         add_header Retry-After 1 always;
-        return 429 '{"type":"urn:usta:error:too_many_requests","title":"Too many requests","status":429,"code":"TOO_MANY_REQUESTS","detail":"Edge rate limit"}';
+        return 429 '{"type":"urn:usta:error:too_many_requests","title":"$rate_limit_message","status":429,"code":"TOO_MANY_REQUESTS","detail":"$rate_limit_message"}';
     }
 
     # Actuator tashqariga chiqmaydi (u alohida ichki portda ham ishlaydi)

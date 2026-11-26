@@ -26,7 +26,6 @@ import uz.usta.platform.shared.error.BusinessException;
 import uz.usta.platform.shared.outbox.OutboxPublisher;
 import uz.usta.platform.storage.FilePurpose;
 import uz.usta.platform.storage.FileStorage;
-import uz.usta.platform.storage.StoredFile;
 
 /**
  * Usta verifikatsiyasi: hujjat yuklash -> yuborish (PENDING) -> admin tasdiqlaydi/rad etadi.
@@ -62,8 +61,17 @@ public class MasterVerificationService {
         return documents.findByMasterIdOrderByCreatedAtAsc(masterId);
     }
 
-    @Transactional
+    /** Fayl DB tranzaksiyasi tashqarisida yuklanadi; shartlar saqlashdan oldin qayta tekshiriladi. */
     public VerificationDocument upload(UUID masterId, DocumentType type, MultipartFile file) {
+        requireUploadable(masterId);
+        return storage.storeAndSave(FilePurpose.VERIFICATION_DOCUMENT, masterId, file, stored -> {
+            requireUploadable(masterId);
+            return documents.saveAndFlush(new VerificationDocument(masterId, type, stored.key(), stored.contentType(),
+                    stored.sizeBytes()));
+        });
+    }
+
+    private void requireUploadable(UUID masterId) {
         MasterProfile profile = profile(masterId);
         if (!profile.documentsEditable()) {
             throw new BusinessException(ProfileErrorCode.DOCUMENTS_LOCKED, profile.getVerificationStatus().name());
@@ -71,9 +79,6 @@ public class MasterVerificationService {
         if (documents.countByMasterId(masterId) >= props.maxDocuments()) {
             throw new BusinessException(ProfileErrorCode.DOCUMENT_LIMIT_EXCEEDED, props.maxDocuments());
         }
-        StoredFile stored = storage.store(FilePurpose.VERIFICATION_DOCUMENT, masterId, file);
-        return documents.saveAndFlush(new VerificationDocument(masterId, type, stored.key(), stored.contentType(),
-                stored.sizeBytes()));
     }
 
     @Transactional

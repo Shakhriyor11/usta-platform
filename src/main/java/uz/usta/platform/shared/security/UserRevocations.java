@@ -44,7 +44,29 @@ public class UserRevocations {
         }
     }
 
+    /**
+     * Rol yoki huquqlar o'zgardi: eski versiyali access tokenlar darhol rad etiladi (401) va mijoz refresh orqali
+     * yangi huquqlar bilan token oladi.
+     */
+    public void authzChanged(UUID userId, int version) {
+        redis.opsForValue().set(versionKey(userId), Integer.toString(version), ttl);
+    }
+
+    public boolean isOutdated(UUID userId, int tokenVersion) {
+        try {
+            String current = redis.opsForValue().get(versionKey(userId));
+            return current != null && tokenVersion < Integer.parseInt(current);
+        } catch (RuntimeException e) {
+            log.warn("Authorization version check skipped (Redis unavailable): {}", e.getMessage());
+            return false;
+        }
+    }
+
     private static String key(UUID userId) {
         return "revoked:user:" + userId;
+    }
+
+    private static String versionKey(UUID userId) {
+        return "authz:ver:" + userId;
     }
 }

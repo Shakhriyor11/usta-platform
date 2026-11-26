@@ -9,7 +9,9 @@ public enum CatalogErrorCode implements ErrorCode {
     CATEGORY_DEPTH_EXCEEDED(HttpStatus.CONFLICT, "error.catalog.category-depth-exceeded"),
     SERVICE_NOT_AVAILABLE(HttpStatus.CONFLICT, "error.catalog.service-not-available"),
     MASTER_SERVICE_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "error.catalog.master-service-limit-exceeded"),
-    PORTFOLIO_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "error.catalog.portfolio-limit-exceeded");
+    PORTFOLIO_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "error.catalog.portfolio-limit-exceeded"),
+    CATEGORY_NOT_EMPTY(HttpStatus.CONFLICT, "error.catalog.category-not-empty"),
+    UNKNOWN_ICON(HttpStatus.BAD_REQUEST, "error.catalog.unknown-icon");
 
     private final HttpStatus status;
     private final String messageKey;

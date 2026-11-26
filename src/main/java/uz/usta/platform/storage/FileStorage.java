@@ -1,6 +1,7 @@
 package uz.usta.platform.storage;
 
 import java.util.UUID;
+import java.util.function.Function;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -9,12 +10,14 @@ import org.springframework.web.multipart.MultipartFile;
 public interface FileStorage {
 
     /**
-     * Faylni tekshiradi (bo'sh emas, hajm, haqiqiy turi) va saqlaydi. Faol DB tranzaksiyasi ichida
-     * chaqirilsa va tranzaksiya rollback bo'lsa — fayl avtomatik o'chiriladi (yetim fayl qolmaydi).
+     * Faylni tekshiradi (bo'sh emas, hajm, haqiqiy turi), yuklaydi va keyin {@code save} ni yangi qisqa DB
+     * tranzaksiyasida bajaradi. Yuklash tranzaksiyadan tashqarida — chaqiruvchi ham tranzaksiyasiz chaqirishi
+     * kerak, aks holda sekin yuklash DB ulanishi va qulflarni band qiladi. {@code save} yoki commit xato bersa,
+     * fayl o'chiriladi (yetim fayl qolmaydi).
      *
      * @param ownerId fayl egasi — kalit {@code {folder}/{ownerId}/{uuid}.{ext}} ko'rinishida bo'ladi
      */
-    StoredFile store(FilePurpose purpose, UUID ownerId, MultipartFile file);
+    <T> T storeAndSave(FilePurpose purpose, UUID ownerId, MultipartFile file, Function<StoredFile, T> save);
 
     /** Faylni o'qish uchun presigned GET URL ({@code app.storage.url-ttl} muddatga). */
     String url(String key);

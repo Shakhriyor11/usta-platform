@@ -15,7 +15,10 @@ public enum OrderErrorCode implements ErrorCode {
     ORDER_NOT_EDITABLE(HttpStatus.CONFLICT, "error.order.not-editable"),
     ATTACHMENT_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "error.order.attachment-limit-exceeded"),
     ORDER_NOT_REVIEWABLE(HttpStatus.CONFLICT, "error.order.not-reviewable"),
-    PRICE_REQUIRED(HttpStatus.BAD_REQUEST, "error.order.price-required");
+    PRICE_REQUIRED(HttpStatus.BAD_REQUEST, "error.order.price-required"),
+    PRICE_NOT_POSITIVE(HttpStatus.BAD_REQUEST, "error.order.price-not-positive"),
+    MASTER_HAS_OVERDUE_DEBT(HttpStatus.FORBIDDEN, "error.order.master-overdue-debt"),
+    USER_HAS_ACTIVE_ORDERS(HttpStatus.CONFLICT, "error.order.user-has-active-orders");
 
     private final HttpStatus status;
     private final String messageKey;

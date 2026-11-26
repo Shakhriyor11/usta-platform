@@ -65,6 +65,7 @@ class OrderTransitions {
         history.save(new OrderStatusHistory(order.getId(), previous, order.getStatus(), actorId, reason, now));
         outbox.publish(OrderEvents.AGGREGATE, order.getId(), OrderEvents.STATUS_CHANGED,
                 new OrderEvents.StatusChanged(order.getId(), order.getCustomerId(), order.getMasterId(),
-                        previous == null ? null : previous.name(), order.getStatus().name(), actorId, reason));
+                        previous == null ? null : previous.name(), order.getStatus().name(), actorId, reason,
+                        order.getPrice()));
     }
 }

@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param pollInterval  relay so'rov oralig'i
  * @param batchSize     bir siklda ko'pi bilan nechta xabar
  * @param maxAttempts   shundan keyin xabar "dead" hisoblanadi (qo'lda ko'rib chiqiladi)
- * @param retryBackoff  qayta urinish kechikishi (urinishlar soniga ko'paytiriladi)
+ * @param retryBackoff  birinchi qayta urinish kechikishi (har urinishda ikki baravar, 1 soatgacha)
  * @param retention     yetkazilgan xabarlar shuncha vaqtdan keyin o'chiriladi
  */
 @ConfigurationProperties("app.outbox")

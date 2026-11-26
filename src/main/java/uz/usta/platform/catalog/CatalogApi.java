@@ -12,7 +12,7 @@ import uz.usta.platform.shared.i18n.LocalizedText;
 public interface CatalogApi {
 
     /**
-     * Faol xizmat.
+     * Faol xizmat (kategoriyasi va uning ota-bobolari ham faol).
      *
      * @throws uz.usta.platform.shared.error.BusinessException {@code SERVICE_NOT_AVAILABLE} — topilmasa yoki nofaol
      */
@@ -32,6 +32,9 @@ public interface CatalogApi {
 
     /** Xizmatni ko'rsatadigan barcha ustalar (indeksni yangilash uchun). */
     List<UUID> mastersOffering(UUID serviceId);
+
+    /** Kategoriya yoki uning avlodlaridagi xizmatlarni ko'rsatadigan ustalar (nofaollari ham — indeks uchun). */
+    List<UUID> mastersOfferingInCategory(UUID categoryId);
 
     record ServiceInfo(UUID id, UUID categoryId, LocalizedText name) {
     }

@@ -26,6 +26,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class ChatBroadcaster {
 
     static final String CHANNEL = "ws:chat";
+    static final String DISCONNECT_CHANNEL = "ws:disconnect";
     private static final Logger log = LoggerFactory.getLogger(ChatBroadcaster.class);
 
     private final StringRedisTemplate redis;
@@ -65,12 +66,17 @@ public class ChatBroadcaster {
         }
     }
 
+    /** Foydalanuvchining sessiyalarini barcha instansiyalarda uzadi. Redis xatosi chaqiruvchiga uzatiladi. */
+    void disconnect(UUID userId) {
+        redis.convertAndSend(DISCONNECT_CHANNEL, userId.toString());
+    }
+
     @Configuration(proxyBeanMethods = false)
     static class RedisFanout {
 
         @Bean
         RedisMessageListenerContainer chatFanoutContainer(RedisConnectionFactory factory, JsonMapper json,
-                                                          SimpMessagingTemplate stomp) {
+                                                          SimpMessagingTemplate stomp, SessionCloser sessions) {
             RedisMessageListenerContainer container = new RedisMessageListenerContainer();
             container.setConnectionFactory(factory);
             container.addMessageListener((message, pattern) -> {
@@ -81,6 +87,9 @@ public class ChatBroadcaster {
                     log.warn("Chat fanout failed: {}", ex.getMessage());
                 }
             }, new ChannelTopic(CHANNEL));
+            container.addMessageListener((message, pattern) -> sessions.closeSessionsOf(
+                    UUID.fromString(new String(message.getBody(), StandardCharsets.UTF_8))),
+                    new ChannelTopic(DISCONNECT_CHANNEL));
             return container;
         }
     }

@@ -13,6 +13,8 @@ RUN --mount=type=cache,target=/root/.gradle ./gradlew --no-daemon bootJar -x tes
 FROM eclipse-temurin:25-jre
 # Base image'dagi ishlatilmaydigan Go binary (pebble) — Trivy: CVE (Go stdlib). JVM'ga aloqasi yo'q.
 RUN rm -f /usr/bin/pebble && groupadd --system --gid 10001 app && useradd --system --uid 10001 --gid app --no-create-home app
+# multipart vaqtinchalik fayllari (compose'da shu yerga volume ulanadi — egasi image'dan meros bo'ladi)
+RUN mkdir -p /var/lib/usta/uploads && chown app:app /var/lib/usta/uploads
 WORKDIR /app
 COPY --from=build --chown=app:app /workspace/extracted/dependencies/ ./
 COPY --from=build --chown=app:app /workspace/extracted/spring-boot-loader/ ./

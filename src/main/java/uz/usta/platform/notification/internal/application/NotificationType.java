@@ -1,9 +1,13 @@
 package uz.usta.platform.notification.internal.application;
 
+import java.util.List;
+
 /** Bildirishnoma turlari. Matn: {@code notification.<key>.title|body} (i18n), argumentlar {@code args} da saqlanadi. */
 public enum NotificationType {
     NEW_OFFER("new-offer"),
     ORDER_ACCEPTED("order-accepted"),
+    /** Biriktirilgan usta voz kechdi — yangisi qidirilmoqda. */
+    ORDER_REOPENED("order-reopened"),
     ORDER_STARTED("order-started"),
     ORDER_COMPLETED("order-completed"),
     ORDER_CANCELLED("order-cancelled"),
@@ -28,7 +32,17 @@ public enum NotificationType {
         return "notification." + key + ".title";
     }
 
-    public String bodyKey() {
-        return "notification." + key + ".body";
+    /**
+     * @param args saqlangan argumentlar: narxsiz eski "ish yakunlandi" yozuvlari o'z matnida qoladi; bo'sh chat
+     *             matni — izohsiz rasm
+     */
+    public String bodyKey(List<String> args) {
+        String suffix = ".body";
+        if (this == ORDER_COMPLETED && !args.isEmpty()) {
+            suffix = ".body-priced";
+        } else if (this == CHAT_MESSAGE && args.equals(List.of(""))) {
+            suffix = ".body-image";
+        }
+        return "notification." + key + suffix;
     }
 }

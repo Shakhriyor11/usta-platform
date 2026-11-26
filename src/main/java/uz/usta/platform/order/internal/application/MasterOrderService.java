@@ -37,11 +37,13 @@ public class MasterOrderService {
     private final MasterProfiles masters;
     private final CatalogApi catalog;
     private final Commissions commissions;
+    private final OrderRequeue requeue;
     private final Clock clock;
 
     MasterOrderService(OrderRepository orders, OrderOfferRepository offers, OrderTransitions transitions,
                        OfferDispatcher dispatcher, OrderAccess access, MasterProfiles masters, CatalogApi catalog,
-                       Commissions commissions, Clock clock) {
+                       Commissions commissions, OrderRequeue requeue, Clock clock) {
+        this.requeue = requeue;
         this.orders = orders;
         this.offers = offers;
         this.transitions = transitions;
@@ -84,6 +86,9 @@ public class MasterOrderService {
         }
         if (!masters.isPublic(masterId)) {
             throw new BusinessException(OrderErrorCode.MASTER_NOT_ACTIVE);
+        }
+        if (commissions.hasOverdueDebt(masterId)) {
+            throw new BusinessException(OrderErrorCode.MASTER_HAS_OVERDUE_DEBT);
         }
         order.assignMaster(masterId, catalog.priceFrom(masterId, order.getServiceId()).orElse(null));
         offer.respond(OfferStatus.ACCEPTED, now);
@@ -129,22 +134,23 @@ public class MasterOrderService {
         return order;
     }
 
-    /** Usta qabul qilgan, lekin hali boshlamagan buyurtmani bekor qilishi (sabab majburiy). */
+    /**
+     * Usta qabul qilgan, lekin hali boshlamagan buyurtmadan voz kechishi (sabab majburiy): buyurtma qayta
+     * qidiruvga o'tadi. Javobda usta endi biriktirilmagan — mijoz ma'lumotlari va aniq manzil yopiladi.
+     */
     @Transactional
-    public Order cancel(UUID masterId, UUID orderId, String reason) {
+    public MasterView cancel(UUID masterId, UUID orderId, String reason) {
         Order order = access.lockForMaster(orderId, masterId);
         if (order.getStatus() != OrderStatus.ACCEPTED) {
             throw new BusinessException(OrderErrorCode.INVALID_STATUS_TRANSITION, order.getStatus().name(),
-                    OrderStatus.CANCELLED.name());
+                    OrderStatus.SEARCHING.name());
         }
-        order.recordCancellation(masterId, reason);
-        transitions.change(order, OrderStatus.CANCELLED, masterId, reason);
-        return order;
+        return new MasterView(order, requeue.requeue(order, masterId, reason));
     }
 
     @Transactional
     public Order openDispute(UUID masterId, UUID orderId, String reason) {
-        return Disputes.open(access.lockForMaster(orderId, masterId), masterId, reason, transitions);
+        return Disputes.open(access.lockForMaster(orderId, masterId), masterId, reason, transitions, commissions);
     }
 
     @Transactional(readOnly = true)
@@ -154,14 +160,19 @@ public class MasterOrderService {
                 : orders.findByMasterIdAndStatusIn(masterId, statuses, pageable);
     }
 
-    /** Usta ko'ra oladigan buyurtma: unga biriktirilgan yoki unga taklif yuborilgan. */
+    /**
+     * Usta ko'ra oladigan buyurtma: unga biriktirilgan yoki unda hali ochiq taklifi bor. Rad etilgan, muddati
+     * o'tgan yoki boshqa usta olgan taklif buyurtmani ko'rishga huquq bermaydi.
+     */
     @Transactional(readOnly = true)
     public MasterView view(UUID masterId, UUID orderId) {
         Order order = access.get(orderId);
         if (order.isAssignedTo(masterId)) {
             return new MasterView(order, null);
         }
+        Instant now = Instant.now(clock);
         OrderOffer offer = offers.findByOrderIdAndMasterId(orderId, masterId)
+                .filter(o -> order.getStatus() == OrderStatus.SEARCHING && o.isOpen(now))
                 .orElseThrow(() -> OrderAccess.notFound(orderId));
         return new MasterView(order, offer);
     }

@@ -30,7 +30,7 @@ class OrderStatusTest {
     static final Map<OrderStatus, Set<OrderStatus>> EXPECTED = Map.of(
             CREATED, EnumSet.of(SEARCHING, CANCELLED),
             SEARCHING, EnumSet.of(ACCEPTED, EXPIRED, CANCELLED),
-            ACCEPTED, EnumSet.of(IN_PROGRESS, CANCELLED),
+            ACCEPTED, EnumSet.of(IN_PROGRESS, CANCELLED, SEARCHING),
             IN_PROGRESS, EnumSet.of(COMPLETED, DISPUTED),
             COMPLETED, EnumSet.of(COMMISSION, DISPUTED),
             COMMISSION, EnumSet.of(REVIEWED, DISPUTED),

@@ -28,15 +28,12 @@ import uz.usta.platform.support.ApiClient;
 import uz.usta.platform.support.ApiClient.Session;
 import uz.usta.platform.support.IntegrationTest;
 import uz.usta.platform.support.RecordingSmsSender;
+import uz.usta.platform.support.Seeds;
 
 /** Usta yo'li: profil -> hujjatlar -> verifikatsiya -> admin tasdig'i -> xizmatlar va portfolio -> ommaviy kartochka. */
 @IntegrationTest
 class MasterOnboardingIT {
 
-    /** Minimal haqiqiy PNG sarlavhasi (magic bytes) — storage turini baytlar bo'yicha aniqlaydi. */
-    static final byte[] PNG = HexFormat.of().parseHex(
-            "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360000002"
-                    + "000154a24f5d0000000049454e44ae426082");
 
     @Autowired
     MockMvc mvc;
@@ -146,7 +143,7 @@ class MasterOnboardingIT {
                 .andExpect(jsonPath("$", hasSize(3)));
 
         mvc.perform(multipart("/api/v1/master/portfolio")
-                        .file(new MockMultipartFile("file", "work.png", "image/png", PNG))
+                        .file(new MockMultipartFile("file", "work.png", "image/png", Seeds.PNG))
                         .param("description", "Hammom ta'miri").header("Authorization", master.bearer()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.url", startsWith("http")));
@@ -271,7 +268,7 @@ class MasterOnboardingIT {
 
     private ResultActions uploadDocument(Session master, String type) throws Exception {
         return mvc.perform(multipart("/api/v1/master/verification/documents")
-                .file(new MockMultipartFile("file", type.toLowerCase() + ".png", "image/png", PNG))
+                .file(new MockMultipartFile("file", type.toLowerCase() + ".png", "image/png", Seeds.PNG))
                 .param("type", type).header("Authorization", master.bearer()));
     }
 

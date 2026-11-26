@@ -5,6 +5,7 @@
 # Faqat test/staging muhitida! Tozalash: ./loadtest/run.sh cleanup
 set -euo pipefail
 cd "$(dirname "$0")/.."
+[ -f .env ] && set -a && . ./.env && set +a
 PROFILE=${PROFILE:-load}
 K6_IMAGE=${K6_IMAGE:-grafana/k6:1.3.0}
 psql() { docker compose exec -T postgres psql -U "${POSTGRES_USER:-usta}" -d "${POSTGRES_DB:-usta}" "$@"; }
@@ -13,12 +14,14 @@ if [[ "${1:-}" == "cleanup" ]]; then
   psql -q < loadtest/cleanup.sql && echo "Load-test data removed"; exit 0
 fi
 
+: "${JWT_SECRET:?JWT_SECRET (.env) kerak — k6 test tokenlarini API bilan bir xil sir bilan imzolaydi}"
+
 if [[ "$(psql -tAc "select count(*) from users where phone like '+99877%'")" == "0" ]]; then
   echo "Seeding load-test data..."; psql -q < loadtest/seed.sql
-  ADMIN_ID=$(psql -tAc "select u.id from users u join user_roles r on r.user_id=u.id and r.role='ADMIN' limit 1")
-  [[ -n "$ADMIN_ID" ]] || { echo "Admin foydalanuvchi kerak (ADMIN_PHONES bilan bir marta kiring)"; exit 1; }
+  ADMIN_ID=$(psql -tAc "select u.id from users u join user_roles r on r.user_id=u.id and r.role in ('SUPER_ADMIN','ADMIN') order by r.role desc limit 1")
+  [[ -n "$ADMIN_ID" ]] || { echo "Admin foydalanuvchi kerak (SUPER_ADMIN_PHONES dagi raqam bilan bir marta kiring)"; exit 1; }
   # reindex — admin tokeni bilan (k6 konteyneri ichida imzolanadi)
-  docker run --rm --network usta_default -e JWT_SECRET="${JWT_SECRET:-insecure-local-compose-secret-change-me-0123456789}" \
+  docker run --rm --network usta_default -e JWT_SECRET \
     -e ADMIN_ID="$ADMIN_ID" -v "$PWD/loadtest/k6:/scripts:ro" "$K6_IMAGE" run -q /scripts/reindex.js
 fi
 SERVICES=$(psql -tAc "select json_build_object('faucet', md5('svc:faucet-install')::uuid, 'pipe', md5('svc:pipe-leak')::uuid,
@@ -28,6 +31,6 @@ mkdir -p loadtest/results
 OUT="loadtest/results/$(date +%Y%m%dT%H%M%S)-$PROFILE"
 echo "Running k6 profile=$PROFILE -> $OUT.json"
 docker run --rm --user "$(id -u):$(id -g)" --network usta_default -e PROFILE="$PROFILE" -e DURATION="${DURATION:-5m}" -e SERVICES="$SERVICES" \
-  -e JWT_SECRET="${JWT_SECRET:-insecure-local-compose-secret-change-me-0123456789}" \
+  -e JWT_SECRET \
   -v "$PWD/loadtest/k6:/scripts:ro" -v "$PWD/loadtest/results:/results" \
   "$K6_IMAGE" run --summary-export "/results/$(basename "$OUT").json" /scripts/usta.js | tee "$OUT.txt"

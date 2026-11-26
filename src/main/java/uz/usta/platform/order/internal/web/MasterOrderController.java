@@ -97,11 +97,12 @@ class MasterOrderController {
         return mapper.toMasterResponse(new MasterView(service.complete(user.id(), id, body.price()), null));
     }
 
-    @Operation(summary = "Qabul qilingan buyurtmani bekor qilish (faqat ACCEPTED, sabab majburiy)")
+    @Operation(summary = "Qabul qilingan buyurtmadan voz kechish (faqat ACCEPTED, sabab majburiy)",
+            description = "Buyurtma bekor bo'lmaydi: qayta qidiruvga (SEARCHING) o'tadi va boshqa ustalarga yuboriladi")
     @PostMapping("/orders/{id}/cancel")
     MasterOrderResponse cancel(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable UUID id,
                                @Valid @RequestBody ReasonRequest body) {
-        return mapper.toMasterResponse(new MasterView(service.cancel(user.id(), id, body.reason().strip()), null));
+        return mapper.toMasterResponse(service.cancel(user.id(), id, body.reason().strip()));
     }
 
     @Operation(summary = "Nizo ochish")

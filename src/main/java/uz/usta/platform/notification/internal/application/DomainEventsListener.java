@@ -63,14 +63,21 @@ class DomainEventsListener {
         switch (e.to()) {
             case "ACCEPTED" -> notifications.notify(m.id(), e.customerId(), NotificationType.ORDER_ACCEPTED, List.of(), data);
             case "IN_PROGRESS" -> notifications.notify(m.id(), e.customerId(), NotificationType.ORDER_STARTED, List.of(), data);
-            case "COMPLETED" -> notifications.notify(m.id(), e.customerId(), NotificationType.ORDER_COMPLETED, List.of(), data);
+            // mijoz yakuniy summani darhol ko'radi — rozi bo'lmasa nizo ochadi
+            case "COMPLETED" -> notifications.notify(m.id(), e.customerId(), NotificationType.ORDER_COMPLETED,
+                    e.price() == null ? List.of() : List.of(e.price().toPlainString()), data);
+            case "SEARCHING" -> {
+                if ("ACCEPTED".equals(e.from())) { // usta voz kechdi
+                    notifications.notify(m.id(), e.customerId(), NotificationType.ORDER_REOPENED, List.of(), data);
+                }
+            }
             case "EXPIRED" -> notifications.notify(m.id(), e.customerId(), NotificationType.ORDER_EXPIRED, List.of(), data);
             case "CANCELLED" -> notifyAll(m, Arrays.asList(e.customerId(), e.masterId()), e.actorId(),
                     NotificationType.ORDER_CANCELLED, List.of(), data);
             case "DISPUTED" -> notifyAll(m, Arrays.asList(e.customerId(), e.masterId()), e.actorId(),
                     NotificationType.ORDER_DISPUTED, List.of(), data);
             default -> {
-                // CREATED, SEARCHING, COMMISSION, REVIEWED — alohida bildirishnoma kerak emas
+                // CREATED, COMMISSION, REVIEWED — alohida bildirishnoma kerak emas
             }
         }
     }

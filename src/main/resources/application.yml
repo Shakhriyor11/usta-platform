@@ -101,6 +101,7 @@ springdoc:
     display-request-duration: true
     filter: true                     # endpoint/teg bo'yicha qidiruv
     doc-expansion: none              # bo'limlar yopiq holda ochiladi
+    deep-linking: true               # endpoint havolasini ulashish mumkin (…#/Chat/sendImage)
     try-it-out-enabled: true
   default-produces-media-type: application/json
 
@@ -121,8 +122,10 @@ app:
   identity:
     refresh-token-ttl: ${JWT_REFRESH_TTL:P30D}
     refresh-reuse-grace: PT10S
-    # Vergul bilan: +998901234567,+998911234567 — shu raqamlar kirganda ADMIN roli beriladi
-    admin-phones: ${ADMIN_PHONES:}
+    # Vergul bilan: +998901234567,+998911234567 — shu raqamlar kirganda SUPER_ADMIN roli beriladi (ro'yxatdan
+    # olinsa, rol keyingi kirish/refresh'da olinadi). Oddiy adminlarni super admin API orqali tayinlaydi.
+    # ADMIN_PHONES — eski nom, SUPER_ADMIN_PHONES berilmasa ishlatiladi.
+    super-admin-phones: ${SUPER_ADMIN_PHONES:${ADMIN_PHONES:}}
     cleanup-cron: "0 45 3 * * *"
     otp:
       length: 5
@@ -134,7 +137,10 @@ app:
       per-ip-limit: 20
       per-ip-window: PT1H
       verify-per-ip-limit: 60
-      # Faqat lokal ishlab chiqish: doimiy kod (masalan 11111). SMS_PROVIDER=log bo'lmasa ilova ishga tushmaydi
+      per-phone-daily-limit: 10   # bir raqamga 24 soatda SMS
+      max-failures-per-day: 15    # bir raqamga 24 soatda noto'g'ri kod (barcha kodlar bo'yicha)
+      # Faqat lokal ishlab chiqish: doimiy kod (masalan 11111). SMS_PROVIDER=log bo'lmasa yoki prod profilida
+      # ilova ishga tushmaydi
       fixed-code: ${OTP_FIXED_CODE:}
   sms:
     provider: ${SMS_PROVIDER:log}   # log | eskiz
@@ -176,6 +182,16 @@ app:
     max-attachments: 5
     maintenance-interval: PT30S
     maintenance-batch: 100
+    scheduled-search-lead: PT1H   # rejalashtirilgan buyurtma: vaqtidan 1 soat oldingacha qidiriladi
+    busy-horizon: PT2H            # shu muddatda boshlanadigan buyurtmalar band ustalarga yuborilmaydi
+    create-limit: 20              # bir mijozga soatiga buyurtma
+    create-window: PT1H
+  complaint:
+    create-limit: 10
+    create-window: P1D
+  upload:
+    limit: 60                     # bir foydalanuvchiga soatiga fayl yuklash
+    window: PT1H
   payment:
     commission-percent: 10
     timezone: Asia/Tashkent           # hisob davri — hafta (dushanba 00:00) shu zonada
@@ -191,7 +207,7 @@ app:
     enabled: ${APP_WARMUP_ENABLED:true}   # trafikdan oldin JVM'ni isitish (docs/performance.md)
   i18n:
     default-locale: uz
-    supported-locales: uz,ru,en
+    supported-locales: uz,uz-Cyrl,ru,en
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
     max-age: 1h

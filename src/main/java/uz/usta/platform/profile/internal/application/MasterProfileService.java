@@ -45,10 +45,14 @@ public class MasterProfileService {
                 .orElseThrow(() -> BusinessException.notFound("Master", masterId));
     }
 
+    /** Verifikatsiyaga yuborilgan/tasdiqlangan profilda ism o'zgarmaydi (admin rad etsa — yana tahrirlanadi). */
     @Transactional
     public MasterProfile upsert(UUID masterId, MasterProfileCommand cmd) {
         MasterProfile profile = profiles.findById(masterId)
                 .orElseGet(() -> new MasterProfile(masterId, cmd.fullName().strip()));
+        if (!profile.documentsEditable() && !profile.getFullName().equals(cmd.fullName().strip())) {
+            throw new BusinessException(ProfileErrorCode.IDENTITY_LOCKED);
+        }
         profile.updateDetails(cmd.fullName().strip(), blankToNull(cmd.bio()), cmd.experienceYears(), cmd.latitude(),
                 cmd.longitude(), cmd.workRadiusKm());
         MasterProfile saved = profiles.saveAndFlush(profile);
@@ -57,15 +61,24 @@ public class MasterProfileService {
         return saved;
     }
 
-    @Transactional
+    /** Fayl DB tranzaksiyasi tashqarisida yuklanadi. Rasm ham ism kabi verifikatsiyadan keyin qulflanadi. */
     public MasterProfile changeAvatar(UUID masterId, MultipartFile file) {
-        MasterProfile profile = get(masterId);
-        String key = storage.store(FilePurpose.AVATAR, masterId, file).key();
-        storage.deleteAfterCommit(profile.replaceAvatar(key));
-        MasterProfile saved = profiles.saveAndFlush(profile);
-        outbox.publish(ProfileEvents.AGGREGATE, masterId, ProfileEvents.MASTER_PROFILE_CHANGED,
-                new ProfileEvents.MasterProfileChanged(masterId));
-        return saved;
+        requireIdentityEditable(get(masterId));
+        return storage.storeAndSave(FilePurpose.AVATAR, masterId, file, stored -> {
+            MasterProfile profile = get(masterId);
+            requireIdentityEditable(profile);
+            storage.deleteAfterCommit(profile.replaceAvatar(stored.key()));
+            MasterProfile saved = profiles.saveAndFlush(profile);
+            outbox.publish(ProfileEvents.AGGREGATE, masterId, ProfileEvents.MASTER_PROFILE_CHANGED,
+                    new ProfileEvents.MasterProfileChanged(masterId));
+            return saved;
+        });
+    }
+
+    private static void requireIdentityEditable(MasterProfile profile) {
+        if (!profile.documentsEditable()) {
+            throw new BusinessException(ProfileErrorCode.IDENTITY_LOCKED);
+        }
     }
 
     private static String blankToNull(String s) {

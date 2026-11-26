@@ -9,8 +9,12 @@ import java.util.UUID;
  *
  * @param type    MESSAGE — yangi xabar ({@code message} to'ldirilgan); READ — {@code readerId} {@code readAt} gacha o'qidi
  */
-@Schema(description = "WebSocket hodisasi: MESSAGE yoki READ")
-public record ChatEvent(String type, MessageView message, UUID readerId, Instant readAt) {
+@Schema(description = "WebSocket hodisasi (/topic/orders.{orderId}.chat)")
+public record ChatEvent(
+        @Schema(allowableValues = {"MESSAGE", "READ"}) String type,
+        @Schema(description = "type=MESSAGE da to'ldiriladi") MessageView message,
+        @Schema(description = "type=READ: kim o'qidi") UUID readerId,
+        @Schema(description = "type=READ: qaysi vaqtgacha o'qidi") Instant readAt) {
 
     public static ChatEvent message(MessageView m) {
         return new ChatEvent("MESSAGE", m, null, null);
@@ -20,6 +24,11 @@ public record ChatEvent(String type, MessageView message, UUID readerId, Instant
         return new ChatEvent("READ", null, readerId, at);
     }
 
-    public record MessageView(UUID id, UUID orderId, UUID senderId, String content, Instant createdAt) {
+    /** @param imageUrl rasmli xabarda — vaqtinchalik (15 daq) havola; {@code content} — izoh, bo'sh bo'lishi mumkin */
+    public record MessageView(
+            UUID id, UUID orderId, UUID senderId,
+            @Schema(description = "Matn yoki rasm izohi; izohsiz rasmda bo'sh satr") String content,
+            @Schema(description = "Rasmli xabarda 15 daqiqalik havola, aks holda null", nullable = true) String imageUrl,
+            Instant createdAt) {
     }
 }

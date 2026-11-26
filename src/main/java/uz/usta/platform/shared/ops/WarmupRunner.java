@@ -50,7 +50,8 @@ class WarmupRunner implements ApplicationRunner {
         long started = System.nanoTime();
         String base = "http://127.0.0.1:" + context.getWebServer().getPort();
         // mavjud bo'lmagan "foydalanuvchi" — faqat o'qish yo'llari va 404/403 yo'llari isitiladi, DB'ga hech narsa yozilmaydi
-        String bearer = "Bearer " + tokens.issue(UUID.randomUUID(), "+998000000000", Set.of(Role.CUSTOMER)).value();
+        String bearer = "Bearer " + tokens.issue(UUID.randomUUID(), "+998000000000", Set.of(Role.CUSTOMER), Set.of(),
+                0).value();
         HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
         String categoryId = firstCategoryId(client, base);
         List<String> paths = List.of(

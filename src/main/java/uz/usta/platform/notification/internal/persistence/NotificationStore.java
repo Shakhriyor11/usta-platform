@@ -105,6 +105,12 @@ public class NotificationStore {
         jdbc.sql("delete from push_tokens where token = :token").param("token", token).update();
     }
 
+    /** Hisob o'chirilganda: bildirishnomalar va qurilma tokenlari. */
+    public void deleteAllFor(UUID userId) {
+        jdbc.sql("delete from notifications where user_id = :userId").param("userId", userId).update();
+        jdbc.sql("delete from push_tokens where user_id = :userId").param("userId", userId).update();
+    }
+
     public List<PushToken> tokens(UUID userId) {
         return jdbc.sql("select token, platform, locale from push_tokens where user_id = :userId")
                 .param("userId", userId)

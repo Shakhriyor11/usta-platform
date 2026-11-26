@@ -25,6 +25,7 @@ import uz.usta.platform.order.OrderApi.Participants;
 import uz.usta.platform.shared.audit.AuditLog;
 import uz.usta.platform.shared.error.BusinessException;
 import uz.usta.platform.shared.outbox.OutboxPublisher;
+import uz.usta.platform.shared.ratelimit.RateLimiter;
 
 /**
  * Shikoyatlar. Mijoz ustadan, usta mijozdan shikoyat qila oladi (usta biriktirilgan buyurtma bo'yicha).
@@ -38,14 +39,18 @@ public class ComplaintService {
     private final OrderApi orders;
     private final OutboxPublisher outbox;
     private final AuditLog audit;
+    private final RateLimiter rateLimiter;
+    private final ComplaintProperties props;
     private final Clock clock;
 
     ComplaintService(ComplaintRepository complaints, OrderApi orders, OutboxPublisher outbox, AuditLog audit,
-                     Clock clock) {
+                     RateLimiter rateLimiter, ComplaintProperties props, Clock clock) {
         this.complaints = complaints;
         this.orders = orders;
         this.outbox = outbox;
         this.audit = audit;
+        this.rateLimiter = rateLimiter;
+        this.props = props;
         this.clock = clock;
     }
 
@@ -68,8 +73,9 @@ public class ComplaintService {
             throw new BusinessException(ComplaintErrorCode.ALREADY_OPEN);
         }
         UUID against = authorId.equals(p.customerId()) ? p.masterId() : p.customerId();
+        rateLimiter.consume("complaint-create", authorId.toString(), props.createLimit(), props.createWindow());
         if (dispute) {
-            orders.openDispute(orderId, authorId, "complaint: " + reason.name());
+            orders.openDispute(orderId, authorId, OrderApi.COMPLAINT_REASON_PREFIX + reason.name());
         }
         Complaint c = complaints.saveAndFlush(new Complaint(orderId, authorId, against, reason, description.strip(),
                 dispute));

@@ -16,6 +16,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.StaticMessageSource;
+import uz.usta.platform.identity.UserDirectory;
 import uz.usta.platform.notification.internal.persistence.NotificationStore;
 import uz.usta.platform.notification.internal.persistence.NotificationStore.PushToken;
 import uz.usta.platform.notification.internal.push.PushSender;
@@ -31,10 +32,11 @@ class NotificationServicePushTest {
         StaticMessageSource messages = new StaticMessageSource();
         NotificationType type = NotificationType.NEW_OFFER;
         messages.addMessage(type.titleKey(), Locale.forLanguageTag("uz"), "Yangi buyurtma");
-        messages.addMessage(type.bodyKey(), Locale.forLanguageTag("uz"), "{0}");
+        messages.addMessage(type.bodyKey(List.of("x")), Locale.forLanguageTag("uz"), "{0}");
         messages.addMessage(type.titleKey(), Locale.forLanguageTag("ru"), "Новый заказ");
-        messages.addMessage(type.bodyKey(), Locale.forLanguageTag("ru"), "{0}");
-        service = new NotificationService(store, new NotificationRenderer(messages), push, Clock.systemUTC());
+        messages.addMessage(type.bodyKey(List.of("x")), Locale.forLanguageTag("ru"), "{0}");
+        service = new NotificationService(store, new NotificationRenderer(messages), push, mock(UserDirectory.class),
+                Clock.systemUTC());
     }
 
     @AfterEach

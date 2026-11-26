@@ -40,7 +40,7 @@ class MasterFinanceController {
     @GetMapping("/summary")
     SummaryResponse summary(@AuthenticationPrincipal AuthenticatedUser user) {
         var s = finance.summary(user.id(), Instant.now(clock));
-        return new SummaryResponse(s.balance(), s.invoicedDue(), s.accrued(), s.currentPeriod(), "UZS");
+        return new SummaryResponse(s.balance(), s.invoicedDue(), s.accrued(), s.currentPeriod(), s.overdue(), "UZS");
     }
 
     @Operation(summary = "Buyurtmalar bo'yicha komissiyalar", description = "?period=2026-11-16&status=INVOICED")

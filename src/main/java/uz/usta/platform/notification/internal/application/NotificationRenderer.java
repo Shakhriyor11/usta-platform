@@ -23,6 +23,6 @@ public class NotificationRenderer {
     public Text render(NotificationType type, List<String> args, Locale locale) {
         Object[] a = args.toArray();
         return new Text(messages.getMessage(type.titleKey(), a, type.name(), locale),
-                messages.getMessage(type.bodyKey(), a, "", locale));
+                messages.getMessage(type.bodyKey(args), a, "", locale));
     }
 }

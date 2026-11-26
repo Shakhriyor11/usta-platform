@@ -28,4 +28,9 @@ public class BillingPeriods {
     public LocalDate dueDate(LocalDate period) {
         return period.plusWeeks(1).plusDays(props.invoiceDueDays());
     }
+
+    /** Boshlanishi shu sanadan oldingi davrlarning to'lov muddati o'tgan ({@code dueDate < bugun}). */
+    public LocalDate overdueBefore(Instant now) {
+        return now.atZone(props.timezone()).toLocalDate().minusWeeks(1).minusDays(props.invoiceDueDays());
+    }
 }

@@ -3,12 +3,15 @@ package uz.usta.platform.catalog.internal.web;
 import java.util.List;
 import org.springframework.stereotype.Component;
 import uz.usta.platform.catalog.internal.application.CatalogQueryService.CategoryNode;
+import uz.usta.platform.catalog.internal.application.IconLibrary;
 import uz.usta.platform.catalog.internal.application.MasterCatalogService.MasterServiceView;
+import uz.usta.platform.catalog.internal.domain.CatalogMedia;
 import uz.usta.platform.catalog.internal.domain.Category;
 import uz.usta.platform.catalog.internal.domain.PortfolioItem;
 import uz.usta.platform.catalog.internal.domain.ServiceDefinition;
 import uz.usta.platform.catalog.internal.web.CatalogDtos.CategoryAdminResponse;
 import uz.usta.platform.catalog.internal.web.CatalogDtos.CategoryTreeResponse;
+import uz.usta.platform.catalog.internal.web.CatalogDtos.IconResponse;
 import uz.usta.platform.catalog.internal.web.CatalogDtos.MasterServiceResponse;
 import uz.usta.platform.catalog.internal.web.CatalogDtos.PortfolioItemResponse;
 import uz.usta.platform.catalog.internal.web.CatalogDtos.PublicMasterServiceResponse;
@@ -19,28 +22,33 @@ import uz.usta.platform.storage.FileStorage;
 
 /**
  * Entity -> DTO. Ko'p tilli maydonlar ommaviy javoblarda joriy tilga ({@code Accept-Language}) o'giriladi,
- * admin javoblarida esa to'liq (uz/ru/en) qaytadi. Bu yerda asosan "resolve" mantig'i bo'lgani uchun
+ * admin javoblarida esa to'liq (uz/ru/en/uzCyrl) qaytadi. Bu yerda asosan "resolve" mantig'i bo'lgani uchun
  * MapStruct o'rniga oddiy mapper.
  */
 @Component
 class CatalogWebMapper {
 
     private final FileStorage storage;
+    private final IconLibrary icons;
 
-    CatalogWebMapper(FileStorage storage) {
+    CatalogWebMapper(FileStorage storage, IconLibrary icons) {
         this.storage = storage;
+        this.icons = icons;
     }
 
     List<CategoryTreeResponse> tree(List<CategoryNode> nodes) {
         return nodes.stream()
-                .map(n -> new CategoryTreeResponse(n.category().getId(), n.category().getSlug(),
-                        n.category().getName().current(), n.category().getIcon(), tree(n.children())))
+                .map(n -> {
+                    Category c = n.category();
+                    return new CategoryTreeResponse(c.getId(), c.getSlug(), c.getName().current(),
+                            c.getMedia().getIcon(), iconUrl(c.getMedia()), imageUrl(c.getMedia()), tree(n.children()));
+                })
                 .toList();
     }
 
     ServiceResponse toResponse(ServiceDefinition s) {
         return new ServiceResponse(s.getId(), s.getCategoryId(), s.getSlug(), s.getName().current(),
-                current(s.getDescription()));
+                current(s.getDescription()), s.getMedia().getIcon(), iconUrl(s.getMedia()), imageUrl(s.getMedia()));
     }
 
     MasterServiceResponse toResponse(MasterServiceView v) {
@@ -60,13 +68,29 @@ class CatalogWebMapper {
     }
 
     CategoryAdminResponse toAdmin(Category c) {
-        return new CategoryAdminResponse(c.getId(), c.getParentId(), c.getSlug(), c.getName(), c.getIcon(),
-                c.getSortOrder(), c.getStatus(), c.getCreatedAt(), c.getUpdatedAt());
+        CatalogMedia media = c.getMedia();
+        return new CategoryAdminResponse(c.getId(), c.getParentId(), c.getSlug(), c.getName(), media.getIcon(),
+                iconUrl(media), media.getIconKey() != null, imageUrl(media), c.getSortOrder(), c.getStatus(),
+                c.getCreatedAt(), c.getUpdatedAt());
     }
 
     ServiceAdminResponse toAdmin(ServiceDefinition s) {
+        CatalogMedia media = s.getMedia();
         return new ServiceAdminResponse(s.getId(), s.getCategoryId(), s.getSlug(), s.getName(), s.getDescription(),
-                s.getSortOrder(), s.getStatus(), s.getCreatedAt(), s.getUpdatedAt());
+                media.getIcon(), iconUrl(media), media.getIconKey() != null, imageUrl(media), s.getSortOrder(),
+                s.getStatus(), s.getCreatedAt(), s.getUpdatedAt());
+    }
+
+    IconResponse toResponse(IconLibrary.Icon icon) {
+        return new IconResponse(icon.key(), icon.name().current(), icons.url(icon.key()));
+    }
+
+    private String iconUrl(CatalogMedia media) {
+        return media.getIconKey() != null ? storage.url(media.getIconKey()) : icons.url(media.getIcon());
+    }
+
+    private String imageUrl(CatalogMedia media) {
+        return storage.url(media.getImageKey());
     }
 
     private static String current(LocalizedText text) {

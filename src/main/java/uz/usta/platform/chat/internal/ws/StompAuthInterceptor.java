@@ -1,16 +1,14 @@
 package uz.usta.platform.chat.internal.ws;
 
 import java.security.Principal;
+import java.util.Optional;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageDeliveryException;
-import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
@@ -26,24 +24,28 @@ import uz.usta.platform.shared.security.UserRevocations;
 
 /**
  * STOMP xavfsizligi. HTTP handshake ochiq (brauzer WebSocket'ga sarlavha qo'sha olmaydi), autentifikatsiya
- * CONNECT kadrida: REST bilan bir xil access token (JWT) tekshiriladi. Obuna faqat ruxsat etilgan mavzularga.
+ * CONNECT kadrida: REST bilan bir xil access token (JWT) tekshiriladi. Qolgan kadrlar oq ro'yxat bo'yicha:
+ * obuna — faqat ruxsat etilgan mavzularga, yuborish — faqat {@code /app/**} ga (mavzuga to'g'ridan-to'g'ri
+ * yozib, boshqa foydalanuvchi nomidan soxta hodisa tarqatib bo'lmaydi).
  */
 @Component
 class StompAuthInterceptor implements ChannelInterceptor {
 
     private static final Logger log = LoggerFactory.getLogger(StompAuthInterceptor.class);
-    private static final Pattern CHAT_TOPIC = Pattern.compile("^/topic/orders\\.([0-9a-fA-F-]{36})\\.chat$");
+    private static final String APP_PREFIX = "/app/";
 
     private final JwtDecoder jwtDecoder;
     private final Converter<Jwt, AbstractAuthenticationToken> converter;
     private final ChatService chat;
+    private final ChatSessions sessions;
     private final UserRevocations revocations;
 
     StompAuthInterceptor(JwtDecoder jwtDecoder, Converter<Jwt, AbstractAuthenticationToken> converter,
-                         ChatService chat, UserRevocations revocations) {
+                         ChatService chat, ChatSessions sessions, UserRevocations revocations) {
         this.jwtDecoder = jwtDecoder;
         this.converter = converter;
         this.chat = chat;
+        this.sessions = sessions;
         this.revocations = revocations;
     }
 
@@ -51,20 +53,30 @@ class StompAuthInterceptor implements ChannelInterceptor {
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
         if (accessor == null || accessor.getCommand() == null) {
-            return message;
+            return message; // heartbeat va uzilish hodisalari
         }
-        StompCommand command = accessor.getCommand();
-        if (command == StompCommand.CONNECT) {
-            accessor.setUser(authenticate(accessor.getFirstNativeHeader("Authorization")));
-            return message;
-        }
-        if (command == StompCommand.SUBSCRIBE || command == StompCommand.SEND) {
-            AuthenticatedUser user = user(accessor.getUser());
-            if (command == StompCommand.SUBSCRIBE) {
-                authorizeSubscription(user, accessor.getDestination());
+        switch (accessor.getCommand()) {
+            case CONNECT, STOMP -> {
+                Authentication auth = authenticate(accessor.getFirstNativeHeader("Authorization"));
+                accessor.setUser(auth);
+                sessions.bind(accessor.getSessionId(), user(auth).id());
             }
+            case SUBSCRIBE -> authorizeSubscription(activeUser(accessor), accessor.getDestination());
+            case SEND -> authorizeSend(activeUser(accessor), accessor.getDestination());
+            case UNSUBSCRIBE, DISCONNECT, ACK, NACK, BEGIN, COMMIT, ABORT -> {
+                // ruxsat talab qilmaydi
+            }
+            default -> throw new MessageDeliveryException("ACCESS_DENIED"); // server kadrlari (MESSAGE va h.k.)
         }
         return message;
+    }
+
+    private AuthenticatedUser activeUser(StompHeaderAccessor accessor) {
+        AuthenticatedUser user = user(accessor.getUser());
+        if (revocations.isRevoked(user.id())) {
+            throw new MessageDeliveryException("USER_BLOCKED");
+        }
+        return user;
     }
 
     private Authentication authenticate(String header) {
@@ -83,15 +95,19 @@ class StompAuthInterceptor implements ChannelInterceptor {
         return auth;
     }
 
-    private void authorizeSubscription(AuthenticatedUser user, String destination) {
-        if (destination == null) {
+    private void authorizeSend(AuthenticatedUser user, String destination) {
+        if (destination == null || !destination.startsWith(APP_PREFIX)) {
+            log.warn("STOMP send denied: user={} destination={}", user.id(), destination);
             throw new MessageDeliveryException("ACCESS_DENIED");
         }
-        if (destination.startsWith("/user/queue/")) {
+    }
+
+    private void authorizeSubscription(AuthenticatedUser user, String destination) {
+        if (destination != null && destination.startsWith("/user/queue/")) {
             return; // shaxsiy navbat (xatolar)
         }
-        Matcher m = CHAT_TOPIC.matcher(destination);
-        if (!m.matches() || !chat.canRead(UUID.fromString(m.group(1)), user.id())) {
+        Optional<UUID> orderId = ChatDestinations.orderId(destination);
+        if (orderId.isEmpty() || !chat.canRead(orderId.get(), user.id())) {
             log.info("STOMP subscription denied: user={} destination={}", user.id(), destination);
             throw new MessageDeliveryException("ACCESS_DENIED");
         }

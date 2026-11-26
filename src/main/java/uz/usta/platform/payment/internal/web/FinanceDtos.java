@@ -13,6 +13,7 @@ import uz.usta.platform.payment.internal.domain.CommissionReport;
 import uz.usta.platform.payment.internal.domain.CommissionStatus;
 import uz.usta.platform.payment.internal.domain.LedgerTransaction;
 import uz.usta.platform.payment.internal.domain.TransactionType;
+import uz.usta.platform.shared.validation.PlainText;
 
 final class FinanceDtos {
 
@@ -20,9 +21,10 @@ final class FinanceDtos {
     }
 
     @Schema(description = "balance < 0 — platformaga qarz (UZS). invoicedDue — yopilgan haftalar bo'yicha to'lanishi kerak, "
-            + "accrued — joriy haftada yig'ilayotgan komissiya")
+            + "accrued — joriy haftada yig'ilayotgan komissiya, overdue — to'lov muddati o'tgan: yangi takliflar "
+            + "kelmaydi va qabul qilib bo'lmaydi")
     record SummaryResponse(BigDecimal balance, BigDecimal invoicedDue, BigDecimal accrued, LocalDate currentPeriod,
-                           String currency) {
+                           boolean overdue, String currency) {
     }
 
     record CommissionResponse(UUID id, UUID masterId, UUID orderId, BigDecimal baseAmount, BigDecimal ratePercent,
@@ -47,7 +49,7 @@ final class FinanceDtos {
             @NotNull UUID masterId,
             @Schema(example = "2026-11-16", description = "Hafta boshi (dushanba)") @NotNull LocalDate period,
             @Schema(example = "38000") @NotNull @DecimalMin("0") @Digits(integer = 12, fraction = 2) BigDecimal amount,
-            @Schema(example = "Kassa kvitansiyasi #1042") @Size(max = 128) String reference) {
+            @Schema(example = "Kassa kvitansiyasi #1042") @Size(max = 128) @PlainText String reference) {
     }
 
     record SettlementResponse(UUID masterId, LocalDate period, BigDecimal amount, int orders, BigDecimal balance) {

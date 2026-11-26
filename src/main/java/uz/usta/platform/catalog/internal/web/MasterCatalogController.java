@@ -26,6 +26,7 @@ import uz.usta.platform.catalog.internal.web.CatalogDtos.MasterServiceRequest;
 import uz.usta.platform.catalog.internal.web.CatalogDtos.MasterServiceResponse;
 import uz.usta.platform.catalog.internal.web.CatalogDtos.PortfolioItemResponse;
 import uz.usta.platform.shared.security.AuthenticatedUser;
+import uz.usta.platform.shared.validation.PlainText;
 import uz.usta.platform.shared.web.ApiPaths;
 
 @Tag(name = "Master: Services & Portfolio", description = "Ustaning xizmatlari, narxlari va portfoliosi (MASTER roli)")
@@ -74,7 +75,7 @@ class MasterCatalogController {
     @ResponseStatus(HttpStatus.CREATED)
     PortfolioItemResponse addPortfolio(@AuthenticationPrincipal AuthenticatedUser user,
                                        @RequestPart("file") MultipartFile file,
-                                       @RequestParam(required = false) @Size(max = 500) String description) {
+                                       @RequestParam(required = false) @Size(max = 500) @PlainText String description) {
         return mapper.toResponse(service.addPortfolioItem(user.id(), file, description));
     }
 
